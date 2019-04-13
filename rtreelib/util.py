@@ -3,7 +3,7 @@ import platform
 import subprocess
 import tempfile
 from os import path
-from .rtree import RTree, RTreeNode, RTreeEntry
+from .rtree import RTreeBase, RTreeNode, RTreeEntry
 
 try:
     import matplotlib.pyplot as plt
@@ -14,7 +14,7 @@ except ImportError:
     raise RuntimeError("The following libraries are required to create R-Tree diagrams: matplotlib, pydot, tqdm")
 
 
-def draw_rtree(tree: RTree, title=None, filename_ps=None, filename_dot=None, include_images=True):
+def draw_rtree(tree: RTreeBase, title=None, filename_ps=None, filename_dot=None, include_images=True):
     """
     Creates an R-Tree diagram for visualizing the tree structure using graphviz. Note that the diagram may be large and
     take a while to generate, especially if include_images is set to True.
@@ -39,7 +39,7 @@ def draw_rtree(tree: RTree, title=None, filename_ps=None, filename_dot=None, inc
     invoke_file(filename_ps)
 
 
-def plot_rtree(tree: RTree, filename=None, show=True, highlight_node=None, highlight_entry=None):
+def plot_rtree(tree: RTreeBase, filename=None, show=True, highlight_node=None, highlight_entry=None):
     """
     Create a carterian plot (using matplotlib) of the R-Tree nodes/entries. Each node's bounding rectangle
     is plotted as a tan rectangle with dashed edges, and each leaf entry's bounding rectangle is plotted in
@@ -65,7 +65,7 @@ def plot_rtree(tree: RTree, filename=None, show=True, highlight_node=None, highl
     plt.close(fig)
 
 
-def draw_rtree_nodes(graph, tree: RTree, include_images):
+def draw_rtree_nodes(graph, tree: RTreeBase, include_images):
     num_plots = len(list(tree.get_nodes())) + len(list(tree.get_leaf_entries()))
     with tqdm(total=num_plots, desc="Drawing R-Tree", unit="node") as pbar:
         for level, nodes in enumerate(tree.get_levels()):

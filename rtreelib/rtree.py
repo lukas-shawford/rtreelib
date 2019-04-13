@@ -1,13 +1,18 @@
 import math
-import itertools
 from functools import partial
 from typing import TypeVar, Generic, List, Iterable, Callable, Optional
 from .rect import Rect, union_all
 
 T = TypeVar('T')
+DEFAULT_MAX_ENTRIES = 8
 
 
 class RTreeEntry(Generic[T]):
+    """
+    R-Tree entry, containing either a pointer to a child RTreeNode instance (if this is not a leaf entry), or data (if
+    this is a leaf entry).
+    """
+
     def __init__(self, rect: Rect, child: 'RTreeNode[T]' = None, data: T = None):
         self.rect = rect
         self.child = child
@@ -24,7 +29,12 @@ class RTreeEntry(Generic[T]):
 
 
 class RTreeNode(Generic[T]):
-    def __init__(self, tree: 'RTree[T]', is_leaf: bool, parent: 'RTreeNode[T]' = None,
+    """
+    An R-Tree node, which is a container for R-Tree entries. The node is a leaf node if its entries contain data;
+    otherwise, if it is a non-leaf node, then its entries contain pointers to children nodes.
+    """
+
+    def __init__(self, tree: 'RTreeBase[T]', is_leaf: bool, parent: 'RTreeNode[T]' = None,
                  entries: List[RTreeEntry[T]] = None):
         self._tree = tree
         self._is_leaf = is_leaf
@@ -58,141 +68,46 @@ class RTreeNode(Generic[T]):
         return union_all([entry.rect for entry in self.entries])
 
 
-def least_enlargement(tree: 'RTree[T]', entry: RTreeEntry[T]) -> RTreeNode[T]:
-    node = tree.root
-    while not node.is_leaf:
-        areas = [child.rect.area() for child in node.entries]
-        enlargements = [entry.rect.union(child.rect).area() - areas[i] for i, child in enumerate(node.entries)]
-        min_enlargement = min(enlargements)
-        indices = [i for i, v in enumerate(enlargements) if math.isclose(v, min_enlargement, rel_tol=1e-5)]
-        if len(indices) == 1:
-            child_entry = node.entries[indices[0]]
-        else:
-            # Choose the entry having the smallest area
-            min_area = min(areas)
-            i = areas.index(min_area)
-            child_entry = node.entries[i]
-        node = child_entry.child
-    return node
-
-
-def adjust_tree_strategy(tree: 'RTree[T]', node: RTreeNode[T], split_node: RTreeNode[T] = None) -> None:
+class RTreeBase(Generic[T]):
     """
-    Ascend from a leaf node to the root, adjusting covering rectangles and propagating node splits as necessary.
+    Base R-Tree class containing functionality common to all R-Tree implementations. The base class requires choosing
+    a strategy for insertion, deletion, and other behaviors. For a default implementation that uses Guttman's
+    strategies, use the RTree class (alias for RTreeGuttman).
     """
-    while not node.is_root:
-        parent = node.parent
-        node.parent_entry.rect = union_all([node.parent_entry.rect] + [entry.rect for entry in node.entries])
-        if split_node is not None:
-            rect = union_all([e.rect for e in split_node.entries])
-            entry = RTreeEntry(rect, child=split_node)
-            parent.entries.append(entry)
-            if len(parent.entries) > tree.max_entries:
-                split_node = tree.split_node(tree, parent)
-            else:
-                split_node = None
-        node = parent
-    if split_node is not None:
-        tree.grow_tree(node, split_node)
 
-
-def quadratic_split(tree: 'RTree[T]', node: RTreeNode[T]) -> RTreeNode[T]:
-    """
-    Guttman's quadratic split. This algorithm attempts to find a small-area split, but is not guaranteed to
-    find one with the smallest area possible. It's a good tradeoff between runtime efficiency and optimal area.
-    Pages in this tree tend to overlap a lot, but the bounding rectangles are generally small, which makes for
-    fast lookup.
-    """
-    entries = node.entries[:]
-    seed1, seed2 = pick_seeds(entries)
-    entries.remove(seed1)
-    entries.remove(seed2)
-    group1, group2 = ([seed1], [seed2])
-    rect1, rect2 = (seed1.rect, seed2.rect)
-    num_entries = len(entries)
-    while num_entries > 0:
-        # If one group has so few entries that all the rest must be assigned to it in order for it to meet the
-        # min_entries requirement, assign them and stop.
-        len1, len2 = (len(group1), len(group2))
-        if len1 < tree.min_entries <= len1 + num_entries:
-            group1.extend(entries)
-            break
-        if len2 < tree.min_entries <= len2 + num_entries:
-            group2.extend(entries)
-            break
-        # Pick the next entry to assign
-        area1, area2 = rect1.area(), rect2.area()
-        entry = pick_next(entries, rect1, area1, rect2, area2)
-        # Add it to the group whose covering rectangle will have to be enlarged the least to accommodate it.
-        # Resolve ties by adding the entry to the group with the smaller area, then to the one with fewer
-        # entries, then to either.
-        urect1, urect2 = rect1.union(entry.rect), rect2.union(entry.rect)
-        enlargement1 = urect1.area() - area1
-        enlargement2 = urect2.area() - area2
-        if enlargement1 == enlargement2:
-            if area1 == area2:
-                group = group1 if len1 <= len2 else group2
-            else:
-                group = group1 if area1 < area2 else group2
-        else:
-            group = group1 if enlargement1 < enlargement2 else group2
-        group.append(entry)
-        # Update the winning group's covering rectangle
-        if group is group1:
-            rect1 = urect1
-        else:
-            rect2 = urect2
-        # Update entries list
-        entries.remove(entry)
-        num_entries = len(entries)
-    return tree.perform_node_split(node, group1, group2)
-
-
-def pick_seeds(entries: List[RTreeEntry[T]]) -> (RTreeEntry[T], RTreeEntry[T]):
-    seeds = None
-    max_wasted_area = None
-    for e1, e2 in itertools.combinations(entries, 2):
-        combined_rect = e1.rect.union(e2.rect)
-        wasted_area = combined_rect.area() - e1.rect.area() - e2.rect.area()
-        if max_wasted_area is None or wasted_area > max_wasted_area:
-            max_wasted_area = wasted_area
-            seeds = (e1, e2)
-    return seeds
-
-
-def pick_next(remaining_entries: List[RTreeEntry[T]],
-              group1_rect: Rect,
-              group1_area: float,
-              group2_rect: Rect,
-              group2_area: float) -> RTreeEntry[T]:
-    max_diff = None
-    result = None
-    for e in remaining_entries:
-        d1 = group1_rect.union(e.rect).area() - group1_area
-        d2 = group2_rect.union(e.rect).area() - group2_area
-        diff = math.fabs(d1 - d2)
-        if max_diff is None or diff > max_diff:
-            max_diff = diff
-            result = e
-    return result
-
-
-class RTree(Generic[T]):
     def __init__(
             self,
-            max_entries: int = 8,
-            choose_leaf: Callable[['RTree[T]', RTreeEntry[T]], RTreeNode[T]] = least_enlargement,
-            adjust_tree: Callable[['RTree[T]', RTreeNode[T], RTreeNode[T]], None] = adjust_tree_strategy,
-            split_node: Callable[['RTree[T]', RTreeNode[T]], RTreeNode[T]] = quadratic_split
+            choose_leaf: Callable[['RTreeBase[T]', RTreeEntry[T]], RTreeNode[T]],
+            adjust_tree: Callable[['RTreeBase[T]', RTreeNode[T], RTreeNode[T]], None],
+            split_node: Callable[['RTreeBase[T]', RTreeNode[T]], RTreeNode[T]],
+            max_entries: int = DEFAULT_MAX_ENTRIES,
+            min_entries: int = None
     ):
+        """
+        Initializes the R-Tree
+        :param choose_leaf: Strategy used for choosing a leaf node when inserting a new entry.
+        :param adjust_tree: Strategy used for balancing the tree and updating bounding rectangles after inserting a
+            new entry.
+        :param split_node: Strategy used for splitting an overflowing node (a node where the number of entries exceeds
+            max_entries).
+        :param max_entries: Maximum number of entries per node.
+        :param min_entries: Minimum number of entries per node. Defaults to ceil(max_entries/2).
+        """
         self.max_entries = max_entries
-        self.min_entries = math.ceil(max_entries/2)
+        self.min_entries = min_entries or math.ceil(max_entries/2)
+        assert self.max_entries >= self.min_entries
         self.choose_leaf = choose_leaf
         self.adjust_tree = adjust_tree
         self.split_node = split_node
         self.root = RTreeNode(self, True)
 
     def insert(self, data: T, rect: Rect) -> RTreeEntry[T]:
+        """
+        Inserts a new entry into the tree
+        :param data: Entry data
+        :param rect: Bounding rectangle
+        :return: RTreeEntry instance for the newly-inserted entry.
+        """
         entry = RTreeEntry(rect, data=data)
         node = self.choose_leaf(self, entry)
         node.entries.append(entry)
@@ -204,6 +119,15 @@ class RTree(Generic[T]):
 
     def perform_node_split(self, node: RTreeNode[T], group1: List[RTreeEntry[T]], group2: List[RTreeEntry[T]])\
             -> RTreeNode[T]:
+        """
+        Splits a given node into two nodes. The original node will have the entries specified in group1, and the
+        newly-created split node will have the entries specified in group2. Both the original and split node will
+        have their children nodes adjusted so they have the correct parent.
+        :param node: Original node to split
+        :param group1: Entries to assign to the original node
+        :param group2: Entries to assign to the newly-created split node
+        :return: The newly-created split node
+        """
         node.entries = group1
         split_node = RTreeNode(self, node.is_leaf, parent=node.parent, entries=group2)
         self._fix_children(node)
@@ -216,14 +140,24 @@ class RTree(Generic[T]):
             for entry in node.entries:
                 entry.child.parent = node
 
-    def grow_tree(self, node1: RTreeNode[T], node2: RTreeNode[T]):
-        self.root = RTreeNode(self, False, entries=[
-            RTreeEntry(node1.get_bounding_rect(), child=node1),
-            RTreeEntry(node2.get_bounding_rect(), child=node2)
-        ])
-        node1.parent = node2.parent = self.root
+    def grow_tree(self, nodes: List[RTreeNode[T]]):
+        """
+        Grows the R-Tree by creating a new root node, with the given nodes as children.
+        :param nodes: Existing nodes that will become children of the new root node.
+        :return: New root node
+        """
+        entries = [RTreeEntry(node.get_bounding_rect(), child=node) for node in nodes]
+        self.root = RTreeNode(self, False, entries=entries)
+        for node in nodes:
+            node.parent = self.root
+        return self.root
 
     def traverse(self, fn: Callable[[RTreeNode[T]], None]) -> None:
+        """
+        Traverses the nodes of the R-Tree in depth-first order, calling the given function on each node. For a
+        level-order traversal (breadth-first), use traverse_level_order instead.
+        :param fn: Function to execute on each node. The function should accept the node as its only parameter.
+        """
         self._traverse(self.root, fn)
 
     def _traverse(self, node: RTreeNode[T], fn: Callable[[RTreeNode[T]], None]) -> None:
@@ -233,6 +167,12 @@ class RTree(Generic[T]):
                 self._traverse(entry.child, fn)
 
     def traverse_level_order(self, fn: Callable[[RTreeNode[T], int], None]) -> None:
+        """
+        Traverses the nodes of the R-Tree in level-order (breadth first), calling the given function on each node. For a
+        depth-first traversal, use the traverse method instead.
+        :param fn: Function to execute on each node. This function should accept the node, and optionally the current
+            level (with 0 corresponding to the root level) as parameters.
+        """
         stack = [(self.root, 0)]
         while stack:
             node, level = stack[0]
@@ -242,6 +182,10 @@ class RTree(Generic[T]):
                 stack.extend([(entry.child, level + 1) for entry in node.entries])
 
     def get_levels(self) -> List[List[RTreeNode[T]]]:
+        """
+        Returns a list containing a list of nodes at each level of the R-Tree (i.e., the i-th element in the return list
+        contains a list of nodes at level i of the tree, with level 0 corresponding to the root).
+        """
         levels: List[List[RTreeNode[T]]] = []
         fn = partial(_add_node_to_level, levels)
         # noinspection PyTypeChecker
@@ -249,6 +193,7 @@ class RTree(Generic[T]):
         return levels
 
     def get_nodes(self) -> Iterable[RTreeNode[T]]:
+        """Returns an iterable of all nodes in the R-Tree (including intermediate and leaf nodes)"""
         yield from self._get_nodes(self.root)
 
     def _get_nodes(self, node: RTreeNode[T]) -> Iterable[RTreeNode[T]]:
@@ -258,6 +203,11 @@ class RTree(Generic[T]):
                 yield from self._get_nodes(entry.child)
 
     def get_leaves(self) -> List[RTreeNode[T]]:
+        """
+        Returns a list of leaf nodes in the R-Tree. Note that R-Tree nodes are simply containers for child entries,
+        which contain the actual data. If you want to get the actual data elements, you probably want to use
+        get_leaf_entries instead.
+        """
         leaves = []
         fn = partial(_append_if_leaf, leaves)
         # noinspection PyTypeChecker
@@ -265,6 +215,7 @@ class RTree(Generic[T]):
         return leaves
 
     def get_leaf_entries(self) -> Iterable[RTreeEntry[T]]:
+        """Returns an iterable of the leaf entries in the R-Tree which contain the data."""
         for leaf in self.get_leaves():
             for entry in leaf.entries:
                 yield entry

@@ -19,6 +19,9 @@ class Rect:
                    and self.max_y == other.max_y
         return False
 
+    def __repr__(self):
+        return f'Rect({self.min_x}, {self.min_y}, {self.max_x}, {self.max_y})'
+
     def union(self, rect: TRect) -> TRect:
         return Rect(
             min_x=min(self.min_x, rect.min_x),
