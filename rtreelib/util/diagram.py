@@ -2,8 +2,7 @@ import os
 import platform
 import subprocess
 import tempfile
-from os import path
-from .rtree import RTreeBase, RTreeNode, RTreeEntry
+from ..rtree import RTreeBase, RTreeNode, RTreeEntry
 
 try:
     import matplotlib.pyplot as plt
@@ -14,7 +13,7 @@ except ImportError:
     raise RuntimeError("The following libraries are required to create R-Tree diagrams: matplotlib, pydot, tqdm")
 
 
-def draw_rtree(tree: RTreeBase, title=None, filename_ps=None, filename_dot=None, include_images=True):
+def create_rtree_diagram(tree: RTreeBase, title=None, filename_ps=None, filename_dot=None, include_images=True):
     """
     Creates an R-Tree diagram for visualizing the tree structure using graphviz. Note that the diagram may be large and
     take a while to generate, especially if include_images is set to True.
@@ -30,18 +29,18 @@ def draw_rtree(tree: RTreeBase, title=None, filename_ps=None, filename_dot=None,
     """
     graph = pydot.Dot(graph_type='digraph', label=title, labelloc='t')
     graph.set_node_defaults(shape='plaintext')
-    draw_rtree_nodes(graph, tree, include_images)
-    draw_rtree_edges(graph, tree.root)
+    _draw_rtree_nodes(graph, tree, include_images)
+    _draw_rtree_edges(graph, tree.root)
     filename_ps = filename_ps or tempfile.mkstemp('.ps')[1]
     graph.write(filename_ps, format='ps')
     filename_dot = filename_dot or tempfile.mkstemp('.dot')[1]
     graph.write(filename_dot)
-    invoke_file(filename_ps)
+    _invoke_file(filename_ps)
 
 
 def plot_rtree(tree: RTreeBase, filename=None, show=True, highlight_node=None, highlight_entry=None):
     """
-    Create a carterian plot (using matplotlib) of the R-Tree nodes/entries. Each node's bounding rectangle
+    Create a cartesian plot (using matplotlib) of the R-Tree nodes/entries. Each node's bounding rectangle
     is plotted as a tan rectangle with dashed edges, and each leaf entry's bounding rectangle is plotted in
     blue. A particular node or entry may be highlighted in the plot by passing in highlight_node and/or
     highlight_entry.
@@ -56,8 +55,8 @@ def plot_rtree(tree: RTreeBase, filename=None, show=True, highlight_node=None, h
     padx, pady = (0.1 * bbox.width, 0.1 * bbox.height)
     ax.set_xlim(left=bbox.min_x - padx, right=bbox.max_x + padx)
     ax.set_ylim(bottom=bbox.min_y - pady, top=bbox.max_y + pady)
-    plot_rtree_leaves(ax, tree, highlight_entry)
-    plot_rtree_nodes(ax, tree, highlight_node)
+    _plot_rtree_leaves(ax, tree, highlight_entry)
+    _plot_rtree_nodes(ax, tree, highlight_node)
     if filename:
         plt.savefig(filename, bbox_inches='tight')
     if show:
@@ -65,7 +64,7 @@ def plot_rtree(tree: RTreeBase, filename=None, show=True, highlight_node=None, h
     plt.close(fig)
 
 
-def draw_rtree_nodes(graph, tree: RTreeBase, include_images):
+def _draw_rtree_nodes(graph, tree: RTreeBase, include_images):
     num_plots = len(list(tree.get_nodes())) + len(list(tree.get_leaf_entries()))
     with tqdm(total=num_plots, desc="Drawing R-Tree", unit="node") as pbar:
         for level, nodes in enumerate(tree.get_levels()):
@@ -77,7 +76,7 @@ def draw_rtree_nodes(graph, tree: RTreeBase, include_images):
                     img = tempfile.mkstemp(prefix='node_', suffix='.png')[1]
                     highlight_node = node if not node.is_root else None
                     plot_rtree(tree, filename=img, show=False, highlight_node=highlight_node)
-                subgraph.add_node(rtree_node_to_pydot(node, img))
+                subgraph.add_node(_rtree_node_to_pydot(node, img))
                 pbar.update()
         leaf_subgraph = pydot.Subgraph(rank='same')
         graph.add_subgraph(leaf_subgraph)
@@ -86,11 +85,11 @@ def draw_rtree_nodes(graph, tree: RTreeBase, include_images):
             if include_images:
                 img = tempfile.mkstemp(prefix='entry_', suffix='.png')[1]
                 plot_rtree(tree, filename=img, show=False, highlight_entry=entry)
-            leaf_subgraph.add_node(rtree_leaf_entry_to_pydot(entry, img))
+            leaf_subgraph.add_node(_rtree_leaf_entry_to_pydot(entry, img))
             pbar.update()
 
 
-def rtree_node_to_pydot(node: RTreeNode, img=None):
+def _rtree_node_to_pydot(node: RTreeNode, img=None):
     rect = node.get_bounding_rect()
     num_children = len(node.entries)
     children_cells = ''.join([f'<td port="{id(entry)}"><font point-size="8">{entry}</font></td>'
@@ -103,17 +102,13 @@ def rtree_node_to_pydot(node: RTreeNode, img=None):
                 <tr><td border="0" colspan="{num_children}"><font point-size="8"><b>{node}</b></font></td></tr>
                 <tr><td border="0" colspan="{num_children}"><font point-size="8">rect={rect_str}</font></td></tr>
                 <tr><td border="0" colspan="{num_children}"><font point-size="8">area={rect.area()}</font></td></tr>
-                <tr><td border="0" colspan="{num_children}"><font point-size="8">parent={node.parent}</font></td></tr>
-                <tr><td border="0" colspan="{num_children}">
-                    <font point-size="8">parent_entry={node.parent_entry}</font>
-                </td></tr>
                 {img_row}
                 <tr>{children_cells}</tr>
             </table>>'''
     )
 
 
-def rtree_leaf_entry_to_pydot(entry: RTreeEntry, img=None):
+def _rtree_leaf_entry_to_pydot(entry: RTreeEntry, img=None):
     assert entry.is_leaf
     rect = entry.rect
     rect_str = f'({rect.min_x}, {rect.min_y}, {rect.max_x}, {rect.max_y})'
@@ -130,38 +125,15 @@ def rtree_leaf_entry_to_pydot(entry: RTreeEntry, img=None):
     )
 
 
-def draw_rtree_edges(graph, node: RTreeNode):
+def _draw_rtree_edges(graph, node: RTreeNode):
     for entry in node.entries:
         graph.add_edge(pydot.Edge(id(node), id(entry) if node.is_leaf else id(entry.child), tailport=id(entry)))
     if not node.is_leaf:
         for entry in node.entries:
-            draw_rtree_edges(graph, entry.child)
+            _draw_rtree_edges(graph, entry.child)
 
 
-def create_digraph():
-    graph = pydot.Dot(graph_type='digraph')
-    graph.set_node_defaults(shape='plaintext')
-    node = pydot.Node(
-        '11',
-        label='''<<table border="0" cellborder="1" cellspacing="0">
-            <tr><td colspan="2">11</td></tr>
-            <tr>
-                <td port="sibling">4</td>
-                <td port="child">10</td>
-            </tr>
-        </table>>'''
-    )
-    graph.add_node(node)
-    graph.add_node(pydot.Node('B', label='Sir Bedevere the Wise'))
-    graph.add_node(pydot.Node('C', label='Sir Lancelot the Brave'))
-    graph.add_edge(pydot.Edge('11', 'B', tailport='sibling'))
-    graph.add_edge(pydot.Edge('11', 'C', tailport='child'))
-    filename = path.join('temp', 'graph.ps')
-    graph.write(filename, format='ps')
-    invoke_file(filename)
-
-
-def invoke_file(filepath):
+def _invoke_file(filepath):
     if platform.system() == 'Darwin':  # macOS
         subprocess.call(('open', filepath))
     elif platform.system() == 'Windows':  # Windows
@@ -171,7 +143,7 @@ def invoke_file(filepath):
         subprocess.call(('xdg-open', filepath))
 
 
-def plot_rtree_leaves(ax, tree, highlight_entry=None):
+def _plot_rtree_leaves(ax, tree, highlight_entry=None):
     for entry in tree.get_leaf_entries():
         xy = (entry.rect.min_x, entry.rect.min_y)
         w, h = (entry.rect.width, entry.rect.height)
@@ -195,7 +167,7 @@ def plot_rtree_leaves(ax, tree, highlight_entry=None):
             ha='left')
 
 
-def plot_rtree_nodes(ax, tree, highlight_node=None):
+def _plot_rtree_nodes(ax, tree, highlight_node=None):
     for node in tree.get_nodes():
         rect = node.get_bounding_rect()
         xy = (rect.min_x, rect.min_y)

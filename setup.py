@@ -12,7 +12,7 @@ here = os.path.abspath(os.path.dirname(__file__))
 
 # Package meta-data
 NAME = 'rtreelib'
-DESCRIPTION = 'Pluggable R-Tree implementation in pure Python.'
+DESCRIPTION = 'Pluggable R-tree implementation in pure Python.'
 URL = 'http://github.com/sergkr/rtreelib'
 AUTHOR = 'Sergey Krilov'
 REQUIRES_PYTHON = '>=3.6.0'
@@ -22,7 +22,7 @@ REQUIRED = []
 
 # Optional packages
 EXTRAS = {
-    'util': ['matplotlib>=3.0.0', 'pydot>=1.3.0', 'tqdm>=v4.31.0'],
+    'diagram': ['matplotlib>=3.0.0', 'pydot>=1.3.0', 'tqdm>=v4.31.0'],
 }
 
 # Load version from rtreelib/__version__.py
