@@ -1,0 +1,36 @@
+CREATE TABLE ${schema}.rtree
+(
+  id SERIAL PRIMARY KEY
+);
+
+CREATE TABLE ${schema}.rtree_node
+(
+  id SERIAL PRIMARY KEY,
+  rtree_id INT REFERENCES ${schema}.rtree (id) NOT NULL,
+  level INT NOT NULL,
+  bbox GEOMETRY(Polygon, ${srid}),
+  parent_entry_id INT NULL,
+  leaf BOOLEAN NOT NULL
+);
+
+CREATE INDEX rtree_node_bbox_idx
+  ON ${schema}.rtree_node
+  USING gist (bbox);
+
+CREATE TABLE ${schema}.rtree_entry
+(
+  id SERIAL PRIMARY KEY,
+  parent_node_id INT REFERENCES ${schema}.rtree_node (id) NOT NULL,
+  bbox GEOMETRY(Polygon, ${srid}) NOT NULL,
+  leaf BOOLEAN NOT NULL,
+  data ${datatype}
+);
+
+CREATE INDEX rtree_entry_bbox_idx
+  ON ${schema}.rtree_entry
+  USING gist (bbox);
+
+ALTER TABLE ${schema}.rtree_node
+  ADD CONSTRAINT rtree_node_parent_entry_id_fkey
+  FOREIGN KEY (parent_entry_id)
+  REFERENCES ${schema}.rtree_entry (id);

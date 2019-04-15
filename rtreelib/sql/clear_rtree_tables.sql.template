@@ -1,0 +1,3 @@
+TRUNCATE TABLE ${schema}.rtree CASCADE;
+TRUNCATE TABLE ${schema}.rtree_node CASCADE;
+TRUNCATE TABLE ${schema}.rtree_entry CASCADE;

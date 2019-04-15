@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS ${schema}.rtree_entry CASCADE;
+DROP TABLE IF EXISTS ${schema}.rtree_node CASCADE;
+DROP TABLE IF EXISTS ${schema}.rtree CASCADE;

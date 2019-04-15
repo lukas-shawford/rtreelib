@@ -1,8 +1,13 @@
+"""
+Module containing utility functions for creating R-tree diagrams. Note that using this module requires that the
+following dependencies are installed: matplotlib, pydot, tqdm
+"""
+
 import os
 import platform
 import subprocess
 import tempfile
-from ..rtree import RTreeBase, RTreeNode, RTreeEntry
+from .rtree import RTreeBase, RTreeNode, RTreeEntry
 
 try:
     import matplotlib.pyplot as plt
