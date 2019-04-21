@@ -14,6 +14,26 @@ from ..rect import Rect, union_all
 T = TypeVar('T')
 
 
+def insert(tree: RTreeBase[T], data: T, rect: Rect) -> RTreeEntry[T]:
+    """
+    Strategy for inserting a new entry into the tree. This makes use of the choose_leaf strategy to find an
+    appropriate leaf node where the new entry should be inserted. If the node is overflowing after inserting the entry,
+    the node is split using the split_node strategy. The tree is balanced after insertion by calling adjust_tree.
+    :param tree: R-tree instance
+    :param data: Entry data
+    :param rect: Bounding rectangle
+    :return: RTreeEntry instance for the newly-inserted entry.
+    """
+    entry = RTreeEntry(rect, data=data)
+    node = tree.choose_leaf(tree, entry)
+    node.entries.append(entry)
+    split_node = None
+    if len(node.entries) > tree.max_entries:
+        split_node = tree.split_node(tree, node)
+    tree.adjust_tree(tree, node, split_node)
+    return entry
+
+
 def least_enlargement(tree: RTreeBase[T], entry: RTreeEntry[T]) -> RTreeNode[T]:
     """
     Select a leaf node in which to place a new index entry. This strategy always inserts into the subtree that requires
@@ -157,5 +177,5 @@ class RTreeGuttman(RTreeBase[T]):
         :param max_entries: Maximum number of entries per node.
         :param min_entries: Minimum number of entries per node. Defaults to ceil(max_entries/2).
         """
-        super().__init__(choose_leaf=least_enlargement, adjust_tree=adjust_tree_strategy, split_node=quadratic_split,
-                         max_entries=max_entries, min_entries=min_entries)
+        super().__init__(insert=insert, choose_leaf=least_enlargement, adjust_tree=adjust_tree_strategy,
+                         split_node=quadratic_split, max_entries=max_entries, min_entries=min_entries)

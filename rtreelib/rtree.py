@@ -77,6 +77,7 @@ class RTreeBase(Generic[T]):
 
     def __init__(
             self,
+            insert: Callable[['RTreeBase[T]', T, Rect], RTreeEntry[T]],
             choose_leaf: Callable[['RTreeBase[T]', RTreeEntry[T]], RTreeNode[T]],
             adjust_tree: Callable[['RTreeBase[T]', RTreeNode[T], RTreeNode[T]], None],
             split_node: Callable[['RTreeBase[T]', RTreeNode[T]], RTreeNode[T]],
@@ -85,6 +86,7 @@ class RTreeBase(Generic[T]):
     ):
         """
         Initializes the R-Tree
+        :param insert: Strategy used for inserting a new entry.
         :param choose_leaf: Strategy used for choosing a leaf node when inserting a new entry.
         :param adjust_tree: Strategy used for balancing the tree and updating bounding rectangles after inserting a
             new entry.
@@ -96,6 +98,7 @@ class RTreeBase(Generic[T]):
         self.max_entries = max_entries
         self.min_entries = min_entries or math.ceil(max_entries/2)
         assert self.max_entries >= self.min_entries
+        self.insert_strategy = insert
         self.choose_leaf = choose_leaf
         self.adjust_tree = adjust_tree
         self.split_node = split_node
@@ -108,14 +111,7 @@ class RTreeBase(Generic[T]):
         :param rect: Bounding rectangle
         :return: RTreeEntry instance for the newly-inserted entry.
         """
-        entry = RTreeEntry(rect, data=data)
-        node = self.choose_leaf(self, entry)
-        node.entries.append(entry)
-        split_node = None
-        if len(node.entries) > self.max_entries:
-            split_node = self.split_node(self, node)
-        self.adjust_tree(self, node, split_node)
-        return entry
+        return self.insert_strategy(self, data, rect)
 
     def perform_node_split(self, node: RTreeNode[T], group1: List[RTreeEntry[T]], group2: List[RTreeEntry[T]])\
             -> RTreeNode[T]:
