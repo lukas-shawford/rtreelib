@@ -5,6 +5,7 @@ from .rect import Rect, union_all
 
 T = TypeVar('T')
 DEFAULT_MAX_ENTRIES = 8
+EPSILON = 1e-5
 
 
 class RTreeEntry(Generic[T]):

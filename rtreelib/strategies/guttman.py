@@ -10,6 +10,7 @@ import itertools
 from typing import List, TypeVar
 from ..rtree import RTreeBase, RTreeEntry, RTreeNode, DEFAULT_MAX_ENTRIES
 from ..rect import Rect, union_all
+from .base import least_area_enlargement
 
 T = TypeVar('T')
 
@@ -34,26 +35,15 @@ def insert(tree: RTreeBase[T], data: T, rect: Rect) -> RTreeEntry[T]:
     return entry
 
 
-def least_enlargement(tree: RTreeBase[T], entry: RTreeEntry[T]) -> RTreeNode[T]:
+def guttman_choose_leaf(tree: RTreeBase[T], entry: RTreeEntry[T]) -> RTreeNode[T]:
     """
     Select a leaf node in which to place a new index entry. This strategy always inserts into the subtree that requires
     least enlargement of its bounding box.
     """
     node = tree.root
     while not node.is_leaf:
-        areas = [child.rect.area() for child in node.entries]
-        enlargements = [entry.rect.union(child.rect).area() - areas[i] for i, child in enumerate(node.entries)]
-        min_enlargement = min(enlargements)
-        indices = [i for i, v in enumerate(enlargements) if math.isclose(v, min_enlargement, rel_tol=1e-5)]
-        # If a single entry is a clear winner, choose that entry. Otherwise, if there are multiple entries having the
-        # same enlargement, choose the entry having the smallest area as a tie-breaker.
-        if len(indices) == 1:
-            child_entry = node.entries[indices[0]]
-        else:
-            min_area = min([areas[i] for i in indices])
-            i = areas.index(min_area)
-            child_entry = node.entries[i]
-        node = child_entry.child
+        e: RTreeEntry = least_area_enlargement(node.entries, entry.rect)
+        node = e.child
     return node
 
 
@@ -177,5 +167,5 @@ class RTreeGuttman(RTreeBase[T]):
         :param max_entries: Maximum number of entries per node.
         :param min_entries: Minimum number of entries per node. Defaults to ceil(max_entries/2).
         """
-        super().__init__(insert=insert, choose_leaf=least_enlargement, adjust_tree=adjust_tree_strategy,
+        super().__init__(insert=insert, choose_leaf=guttman_choose_leaf, adjust_tree=adjust_tree_strategy,
                          split_node=quadratic_split, max_entries=max_entries, min_entries=min_entries)

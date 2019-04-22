@@ -1,7 +1,4 @@
-from typing import TypeVar, List
-
-
-TRect = TypeVar('TRect', bound='Rect')
+from typing import List
 
 
 class Rect:
@@ -22,13 +19,18 @@ class Rect:
     def __repr__(self):
         return f'Rect({self.min_x}, {self.min_y}, {self.max_x}, {self.max_y})'
 
-    def union(self, rect: TRect) -> TRect:
+    def union(self, rect: 'Rect') -> 'Rect':
         return Rect(
             min_x=min(self.min_x, rect.min_x),
             min_y=min(self.min_y, rect.min_y),
             max_x=max(self.max_x, rect.max_x),
             max_y=max(self.max_y, rect.max_y)
         )
+
+    def get_intersection_area(self, rect: 'Rect') -> float:
+        x_overlap = max(0.0, min(self.max_x, rect.max_x) - max(self.min_x, rect.min_x))
+        y_overlap = max(0.0, min(self.max_y, rect.max_y) - max(self.min_y, rect.min_y))
+        return x_overlap * y_overlap
 
     @property
     def width(self):
@@ -37,6 +39,9 @@ class Rect:
     @property
     def height(self):
         return self.max_y - self.min_y
+
+    def perimeter(self) -> float:
+        return 2 * (self.width + self.height)
 
     def area(self) -> float:
         return self.width * self.height

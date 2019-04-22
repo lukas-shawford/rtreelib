@@ -1,50 +1,10 @@
 from unittest import TestCase
 from rtreelib import RTreeGuttman, RTreeNode, RTreeEntry, Rect
-from rtreelib.strategies.guttman import least_enlargement, quadratic_split, adjust_tree_strategy
+from rtreelib.strategies.guttman import quadratic_split, adjust_tree_strategy
 
 
 class TestGuttman(TestCase):
     """Tests for Guttman R-Tree implementation"""
-
-    def test_least_enlargement(self):
-        """
-        Ensure the node whose bounding box needs least enlargement is chosen for a new entry in the case where there is
-        a clear winner.
-        """
-        # Arrange
-        t = RTreeGuttman(max_entries=2)
-        r1 = Rect(0, 0, 3, 3)
-        r2 = Rect(9, 9, 10, 10)
-        t.root = RTreeNode(t, is_leaf=False, entries=[
-            RTreeEntry(r1, child=RTreeNode(t, is_leaf=True, entries=[RTreeEntry(r1, data='a')])),
-            RTreeEntry(r2, child=RTreeNode(t, is_leaf=True, entries=[RTreeEntry(r2, data='b')]))
-        ])
-        e = RTreeEntry(Rect(2, 2, 4, 4), data='c')
-        # Act
-        node = least_enlargement(t, e)
-        # Assert
-        self.assertEqual(Rect(0, 0, 3, 3), node.get_bounding_rect())
-
-    def test_least_enlargement_tie(self):
-        """
-        When two nodes need to be enlarged by the same amount, the strategy should pick the node having the smallest
-        area as a tie-breaker.
-        """
-        # Arrange
-        t = RTreeGuttman(max_entries=3)
-        r1 = Rect(0, 0, 4, 2)
-        r2 = Rect(5, 1, 7, 3)
-        r3 = Rect(0, 4, 1, 5)
-        t.root = RTreeNode(t, is_leaf=False, entries=[
-            RTreeEntry(r1, child=RTreeNode(t, is_leaf=True, entries=[RTreeEntry(r1, data='a')])),
-            RTreeEntry(r2, child=RTreeNode(t, is_leaf=True, entries=[RTreeEntry(r2, data='b')])),
-            RTreeEntry(r3, child=RTreeNode(t, is_leaf=True, entries=[RTreeEntry(r3, data='c')]))
-        ])
-        e = RTreeEntry(Rect(4, 1, 5, 2), data='d')
-        # Act
-        node = least_enlargement(t, e)
-        # Assert
-        self.assertEqual(Rect(5, 1, 7, 3), node.get_bounding_rect())
 
     def test_quadratic_split(self):
         """Ensures that a split results in the smallest total area."""

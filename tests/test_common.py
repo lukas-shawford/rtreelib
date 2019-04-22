@@ -1,12 +1,42 @@
 from unittest import TestCase
-from rtreelib import RTree, Rect
+from rtreelib import Rect, RTree, RTreeEntry
+from rtreelib.strategies.base import least_area_enlargement
 
 
 class TestCommon(TestCase):
     """
-    Common tests for basic R-Tree operations. Note the default implementation uses the Guttman strategy, so there will
-    be some duplication between the common tests and Guttman tests.
+    Common tests for basic R-Tree operations and common strategies. Note the default implementation uses the Guttman
+    strategy, so there will be some duplication between the common tests and Guttman tests.
     """
+
+    def test_least_area_enlargement(self):
+        """
+        Ensure the node whose bounding box needs least enlargement is chosen for a new entry in the case where there is
+        a clear winner.
+        """
+        # Arrange
+        a = RTreeEntry(data='a', rect=Rect(0, 0, 3, 3))
+        b = RTreeEntry(data='b', rect=Rect(9, 9, 10, 10))
+        rect = Rect(2, 2, 4, 4)
+        # Act
+        entry = least_area_enlargement([a, b], rect)
+        # Assert
+        self.assertEqual(a, entry)
+
+    def test_least_area_enlargement_tie(self):
+        """
+        When two nodes need to be enlarged by the same amount, the strategy should pick the node having the smallest
+        area as a tie-breaker.
+        """
+        # Arrange
+        a = RTreeEntry(data='a', rect=Rect(0, 0, 4, 2))
+        b = RTreeEntry(data='b', rect=Rect(5, 1, 7, 3))
+        c = RTreeEntry(data='c', rect=Rect(0, 4, 1, 5))
+        rect = Rect(4, 1, 5, 2)
+        # Act
+        entry = least_area_enlargement([a, b, c], rect)
+        # Assert
+        self.assertEqual(b, entry)
 
     def test_insert_creates_entry(self):
         """Basic test ensuring an insert creates an entry."""
