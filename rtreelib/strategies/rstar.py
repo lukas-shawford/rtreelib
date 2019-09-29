@@ -11,8 +11,7 @@ from ..rect import Rect, union_all
 from .base import least_area_enlargement
 
 T = TypeVar('T')
-RStarAxisStats = namedtuple('RStarAxisStats', ['axis', 'sorted_entries_min', 'sorted_entries_max', 'divisions_min',
-                                               'divisions_max'])
+RStarAxisStats = namedtuple('RStarAxisStats', ['axis', 'sorted_entries_min', 'sorted_entries_max', 'divisions'])
 
 
 def rstar_choose_leaf(tree: RTreeBase[T], entry: RTreeEntry[T]) -> RTreeNode[T]:
@@ -57,7 +56,7 @@ def without(items: List[T], item: T) -> List[T]:
 def overlap(rect: Rect, rects: List[Rect]) -> float:
     """
     Returns the total overlap area of one rectangle with respect to the others. Any common areas where multiple
-    rectanges intersect will be counted multiple times.
+    rectangles intersect will be counted multiple times.
     """
     return sum([rect.get_intersection_area(r) for r in rects])
 
@@ -78,7 +77,7 @@ def choose_split_axis(entries: List[RTreeEntry[T]], min_entries: int, max_entrie
     xstat = _get_axis_stats('x', entries, min_entries, max_entries)
     ystat = _get_axis_stats('y', entries, min_entries, max_entries)
     for stat in [xstat, ystat]:
-        for division in stat.divisions_min + stat.divisions_max:
+        for division in stat.divisions:
             r1, r2 = get_division_rects(division)
             perimeter = r1.perimeter() + r2.perimeter()
             if min_perimeter is None or perimeter < min_perimeter:
@@ -89,13 +88,14 @@ def choose_split_axis(entries: List[RTreeEntry[T]], min_entries: int, max_entrie
 
 def _get_axis_stats(axis: str, entries: List[RTreeEntry[T]], min_entries: int, max_entries: int) -> RStarAxisStats:
     sorted_entries_min = sorted(entries, key=((lambda e: e.rect.min_x) if axis == 'x' else (lambda e: e.rect.min_y)))
-    divisions_min = get_entry_divisions(sorted_entries_min, min_entries, max_entries)
+    divisions_min = get_possible_divisions(sorted_entries_min, min_entries, max_entries)
     sorted_entries_max = sorted(entries, key=((lambda e: e.rect.max_x) if axis == 'x' else (lambda e: e.rect.max_y)))
-    divisions_max = get_entry_divisions(sorted_entries_max, min_entries, max_entries)
-    return RStarAxisStats(axis, sorted_entries_min, sorted_entries_max, divisions_min, divisions_max)
+    divisions_max = get_possible_divisions(sorted_entries_max, min_entries, max_entries)
+    divisions = divisions_min + divisions_max
+    return RStarAxisStats(axis, sorted_entries_min, sorted_entries_max, divisions)
 
 
-def get_entry_divisions(entries: List[RTreeEntry[T]], min_entries: int, max_entries: int) \
+def get_possible_divisions(entries: List[RTreeEntry[T]], min_entries: int, max_entries: int) \
         -> List[Tuple[List[RTreeEntry[T]], List[RTreeEntry[T]]]]:
     """
     Returns a list of all possible divisions of a sorted list of entries into two groups (preserving order), where each
@@ -147,3 +147,25 @@ def choose_split_index(divisions: List[Tuple[List[RTreeEntry[T]], List[RTreeEntr
                 min_area = area
                 split_index = i
         return split_index
+
+
+def rstar_split(tree: RTreeBase[T], node: RTreeNode[T]) -> RTreeNode[T]:
+    """
+    Split an overflowing node. The R*-Tree implementation first determines the optimum split axis (minimizing overall
+    perimeter), then chooses the best split index along the chosen axis (based on minimum overlap).
+
+    :param tree: RTreeBase[T]: R-tree instance.
+    :param node: RTreeNode[T]: Overflowing node that needs to be split.
+    :return: Newly-created split node whose entries are a subset of the original node's entries.
+    """
+    # TODO: Optimize split algorithm to avoid storing, sorting, or calculating statistics for equivalent divisions. For
+    #  instance, the sort order (and therefore the possible divisions) may be the same when sorting along one axis vs
+    #  the other (or by the min value vs the max value; or it may be the same when sorting by all 4 combinations of axes
+    #  and values). However, currently, the algorithm will treat each dimension separately, generating the possible
+    #  divisions separately for each. Further, when considering possible divisions, the order doesn't actually matter,
+    #  so [(a,b), (c)] is equivalent to [(b,a), (c)], since the total perimeter and overlap values will be the same for
+    #  both.
+    stat = choose_split_axis(node.entries, tree.min_entries, tree.max_entries)
+    i = choose_split_index(stat.divisions)
+    division = stat.divisions[i]
+    return tree.perform_node_split(node, division[0], division[1])

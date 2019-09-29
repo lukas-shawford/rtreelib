@@ -14,8 +14,10 @@ class TestGuttman(TestCase):
         t.insert('b', Rect(4, 0, 5, 10))
         t.insert('c', Rect(5, 0, 6, 10))
         t.insert('d', Rect(5, 7, 8, 8))
+
         # Act
         split_node = quadratic_split(t, t.root)
+
         # Assert
         group1 = [e.data for e in t.root.entries]
         group2 = [e.data for e in split_node.entries]

@@ -80,6 +80,10 @@ def quadratic_split(tree: RTreeBase[T], node: RTreeNode[T]) -> RTreeNode[T]:
     be examined on subsequent searches. Since the decision whether to visit a node depends on whether its covering
     rectangle overlaps the search area, the total area of the two covering rectangles after a split should be
     minimized."
+
+    :param tree: RTreeBase[T]: R-tree instance.
+    :param node: RTreeNode[T]: Overflowing node that needs to be split.
+    :return: Newly-created split node whose entries are a subset of the original node's entries.
     """
     entries = node.entries[:]
     seed1, seed2 = _pick_seeds(entries)
