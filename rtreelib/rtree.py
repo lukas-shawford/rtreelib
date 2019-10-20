@@ -1,7 +1,7 @@
 import math
 from functools import partial
-from typing import TypeVar, Generic, List, Iterable, Callable, Optional
-from .rect import Rect, union_all
+from typing import TypeVar, Generic, List, Iterable, Callable, Optional, Tuple
+from rtreelib.models.rect import Rect, union_all
 
 T = TypeVar('T')
 DEFAULT_MAX_ENTRIES = 8
@@ -27,6 +27,10 @@ class RTreeEntry(Generic[T]):
     @property
     def is_leaf(self):
         return self.child is None
+
+
+EntryDivision = Tuple[Iterable[RTreeEntry[T]], Iterable[RTreeEntry[T]]]
+EntryOrdering = Tuple[RTreeEntry[T]]
 
 
 class RTreeNode(Generic[T]):

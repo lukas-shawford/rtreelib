@@ -5,7 +5,7 @@ This module defines strategies and helper functions that are shared by more than
 import math
 from typing import TypeVar, List
 from ..rtree import RTreeEntry, EPSILON
-from ..rect import Rect
+from rtreelib.models import Rect
 
 T = TypeVar('T')
 

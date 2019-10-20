@@ -9,7 +9,7 @@ import math
 import itertools
 from typing import List, TypeVar
 from ..rtree import RTreeBase, RTreeEntry, RTreeNode, DEFAULT_MAX_ENTRIES
-from ..rect import Rect, union_all
+from rtreelib.models import Rect, union_all
 from .base import least_area_enlargement
 
 T = TypeVar('T')
