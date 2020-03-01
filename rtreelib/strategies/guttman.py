@@ -43,7 +43,7 @@ def adjust_tree_strategy(tree: RTreeBase[T], node: RTreeNode[T], split_node: RTr
     """
     while not node.is_root:
         parent = node.parent
-        node.parent_entry.rect = union_all([node.parent_entry.rect] + [entry.rect for entry in node.entries])
+        node.parent_entry.rect = union_all([entry.rect for entry in node.entries])
         if split_node is not None:
             rect = union_all([e.rect for e in split_node.entries])
             entry = RTreeEntry(rect, child=split_node)
