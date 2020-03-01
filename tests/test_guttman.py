@@ -1,5 +1,5 @@
 from unittest import TestCase
-from rtreelib import RTreeGuttman, RTreeEntry, Rect
+from rtreelib import RTreeGuttman, RTreeNode, RTreeEntry, Rect
 from rtreelib.strategies.guttman import least_enlargement, quadratic_split
 
 
@@ -12,9 +12,13 @@ class TestGuttman(TestCase):
         a clear winner.
         """
         # Arrange
-        t = RTreeGuttman(max_entries=1)
-        t.insert('a', Rect(0, 0, 3, 3))
-        t.insert('b', Rect(9, 9, 10, 10))
+        t = RTreeGuttman(max_entries=2)
+        r1 = Rect(0, 0, 3, 3)
+        r2 = Rect(9, 9, 10, 10)
+        t.root = RTreeNode(t, is_leaf=False, entries=[
+            RTreeEntry(r1, child=RTreeNode(t, is_leaf=True, entries=[RTreeEntry(r1, data='a')])),
+            RTreeEntry(r2, child=RTreeNode(t, is_leaf=True, entries=[RTreeEntry(r2, data='b')]))
+        ])
         e = RTreeEntry(Rect(2, 2, 4, 4), data='c')
         # Act
         node = least_enlargement(t, e)
@@ -27,10 +31,16 @@ class TestGuttman(TestCase):
         area as a tie-breaker.
         """
         # Arrange
-        t = RTreeGuttman(max_entries=1)
-        t.insert('a', Rect(0, 0, 4, 2))
-        t.insert('b', Rect(5, 1, 7, 3))
-        e = RTreeEntry(Rect(4, 1, 5, 2), data='c')
+        t = RTreeGuttman(max_entries=3)
+        r1 = Rect(0, 0, 4, 2)
+        r2 = Rect(5, 1, 7, 3)
+        r3 = Rect(0, 4, 1, 5)
+        t.root = RTreeNode(t, is_leaf=False, entries=[
+            RTreeEntry(r1, child=RTreeNode(t, is_leaf=True, entries=[RTreeEntry(r1, data='a')])),
+            RTreeEntry(r2, child=RTreeNode(t, is_leaf=True, entries=[RTreeEntry(r2, data='b')])),
+            RTreeEntry(r3, child=RTreeNode(t, is_leaf=True, entries=[RTreeEntry(r3, data='c')]))
+        ])
+        e = RTreeEntry(Rect(4, 1, 5, 2), data='d')
         # Act
         node = least_enlargement(t, e)
         # Assert

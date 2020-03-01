@@ -30,7 +30,7 @@ def least_enlargement(tree: RTreeBase[T], entry: RTreeEntry[T]) -> RTreeNode[T]:
         if len(indices) == 1:
             child_entry = node.entries[indices[0]]
         else:
-            min_area = min(areas)
+            min_area = min([areas[i] for i in indices])
             i = areas.index(min_area)
             child_entry = node.entries[i]
         node = child_entry.child
