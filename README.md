@@ -378,7 +378,7 @@ particular tree (if you exported multiple R-trees). To do so, click the
 At this point, the layer will be displaying all nodes at every level of the tree,
 which may be a bit hard to decipher if you have a lot of data. After adjusting the
 layer style to make it partially transparent, here is an example of what an R-tree
-with a couple hundred leaf entries might look like (38 nodes across 3 levels):
+with a couple hundred leaf entries might look like (41 nodes across 3 levels):
 
 ![QGIS - All Nodes](https://github.com/sergkr/rtreelib/blob/master/doc/qgis_all_nodes.png)
 
@@ -398,15 +398,30 @@ at a time:
 
 ![QGIS - Layers Panel](https://github.com/sergkr/rtreelib/blob/master/doc/qgis_layers_panel.png)
 
-Now, viewing just the nodes at level 1 (the level immediately below the root node),
-it makes it easier to see what the bounding rectangles look like:
+The advantage with exporting the data to QGIS is you can also bring in your
+original dataset as a layer to see how it was partitioned spatially. Here, I am using
+a subset of the FAA airspace data for a portion of the Northeastern US (shown in
+red), and then toggling each level of the `rtree_node` layer individually so we
+can examine the resulting R-tree structure one level at a time.
 
-![QGIS - Nodes at Level 1](https://github.com/sergkr/rtreelib/blob/master/doc/qgis_level_one_nodes.png)
+Level 0 (root node):
 
-Clearly, using the default Guttman implementation on this particular dataset is
-non-optimal (depending on the use case), as it resulted in a lot of overlap. This
-implies, for instance, that a typical query to find the leaf entry for a given
-location would require visiting many subtrees.
+![QGIS - Root Level Nodes](https://github.com/sergkr/rtreelib/blob/master/doc/qgis_level_0.png)
+
+Level 1:
+
+![QGIS - Nodes at Level 1](https://github.com/sergkr/rtreelib/blob/master/doc/qgis_level_1.png)
+
+Level 2:
+
+![QGIS - Nodes at Level 2](https://github.com/sergkr/rtreelib/blob/master/doc/qgis_level_2.png)
+
+The partitioning looks coherent, though there is still quite a bit of overlap. This is
+made especially evident when using a partially transparent fill, as areas where multiple
+bounding rectangles intersect result in a darker fill. Ideally, the spatial partitioning
+scheme should aim to minimize this overlap, since a query to find the leaf entry for a
+given point would require visiting multiple subtrees if that point happens to land in one
+of these darker areas.
 
 Perhaps a different R-tree variant would work better on this dataset? This is the
 type of question that this library is meant to answer.
