@@ -85,7 +85,7 @@ class RTreeBase(Generic[T]):
             insert: Callable[['RTreeBase[T]', T, Rect], RTreeEntry[T]],
             choose_leaf: Callable[['RTreeBase[T]', RTreeEntry[T]], RTreeNode[T]],
             adjust_tree: Callable[['RTreeBase[T]', RTreeNode[T], RTreeNode[T]], None],
-            split_node: Callable[['RTreeBase[T]', RTreeNode[T]], RTreeNode[T]],
+            overflow_strategy: Callable[['RTreeBase[T]', RTreeNode[T]], RTreeNode[T]],
             max_entries: int = DEFAULT_MAX_ENTRIES,
             min_entries: int = None
     ):
@@ -95,8 +95,8 @@ class RTreeBase(Generic[T]):
         :param choose_leaf: Strategy used for choosing a leaf node when inserting a new entry.
         :param adjust_tree: Strategy used for balancing the tree and updating bounding rectangles after inserting a
             new entry.
-        :param split_node: Strategy used for splitting an overflowing node (a node where the number of entries exceeds
-            max_entries).
+        :param overflow_strategy: Strategy used for dealing with an overflowing node (a node where the number of entries
+            exceeds max_entries).
         :param max_entries: Maximum number of entries per node.
         :param min_entries: Minimum number of entries per node. Defaults to ceil(max_entries/2).
         """
@@ -106,7 +106,7 @@ class RTreeBase(Generic[T]):
         self.insert_strategy = insert
         self.choose_leaf = choose_leaf
         self.adjust_tree = adjust_tree
-        self.split_node = split_node
+        self.overflow_strategy = overflow_strategy
         self.root = RTreeNode(self, True)
 
     def insert(self, data: T, rect: Rect) -> RTreeEntry[T]:

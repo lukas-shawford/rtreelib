@@ -1,5 +1,7 @@
 from unittest import TestCase
 from rtreelib import Rect
+from math import isclose
+from rtreelib.rtree import EPSILON
 
 
 class TestRect(TestCase):
@@ -91,3 +93,13 @@ class TestRect(TestCase):
         area = r1.get_intersection_area(r2)
         # Assert
         self.assertEqual(4, area)
+
+    def test_rect_centroid(self):
+        """Tests calculating the centroid of a rectangle"""
+        # Arrange
+        r = Rect(2, 2, 6, 5)
+        # Act
+        centroid = r.centroid()
+        # Assert
+        self.assertTrue(isclose(4, centroid[0], rel_tol=EPSILON))
+        self.assertTrue(isclose(3.5, centroid[1], rel_tol=EPSILON))

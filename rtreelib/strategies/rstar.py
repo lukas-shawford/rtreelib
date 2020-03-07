@@ -7,9 +7,19 @@ import math
 from typing import List, TypeVar, Iterable, Callable, Any, Dict
 from ..rtree import RTreeBase, RTreeEntry, RTreeNode, DEFAULT_MAX_ENTRIES, EPSILON, EntryDivision, EntryOrdering
 from rtreelib.models import Rect, Axis, Dimension, EntryDistribution, RStarStat
-from .base import least_area_enlargement
+from .base import insert, least_area_enlargement, adjust_tree_strategy
 
 T = TypeVar('T')
+
+
+def rstar_overflow(tree: RTreeBase[T], node: RTreeNode[T]) -> RTreeNode[T]:
+    if node.is_root:
+        return rstar_split(tree, node)
+    return reinsert(tree, node)
+
+
+def reinsert(tree: RTreeBase[T], node: RTreeNode[T]) -> RTreeNode[T]:
+    pass
 
 
 def rstar_choose_leaf(tree: RTreeBase[T], entry: RTreeEntry[T]) -> RTreeNode[T]:
@@ -31,6 +41,17 @@ def rstar_choose_leaf(tree: RTreeBase[T], entry: RTreeEntry[T]) -> RTreeNode[T]:
             e = least_area_enlargement(node.entries, entry.rect)
         node = e.child
     return node
+
+
+def _choose_subtree(levels: List[List[RTreeNode[T]]], level: int, rect: Rect) -> RTreeNode[T]:
+    is_leaf_level = level == len(levels) - 1
+    nodes = levels[level]
+    entries = [entry for node in nodes for entry in node.entries]
+    if is_leaf_level:
+        e = least_overlap_enlargement(entries, rect)
+    else:
+        e = least_area_enlargement(entries, rect)
+    return next(node for node in nodes if e in node.entries)
 
 
 def _are_children_leaves(node: RTreeNode[T]) -> bool:
@@ -181,3 +202,16 @@ def rstar_split(tree: RTreeBase[T], node: RTreeNode[T]) -> RTreeNode[T]:
     d1 = list(distribution.set1)
     d2 = list(distribution.set2)
     return tree.perform_node_split(node, d1, d2)
+
+
+class RStarTree(RTreeBase[T]):
+    """R-tree implementation that uses R* strategies for insertion, splitting, and deletion."""
+
+    def __init__(self, max_entries: int = DEFAULT_MAX_ENTRIES, min_entries: int = None):
+        """
+        Initializes the R-Tree using R* strategies for insertion, splitting, and deletion.
+        :param max_entries: Maximum number of entries per node.
+        :param min_entries: Minimum number of entries per node. Defaults to ceil(max_entries/2).
+        """
+        super().__init__(insert=insert, choose_leaf=rstar_choose_leaf, adjust_tree=adjust_tree_strategy,
+                         overflow_strategy=rstar_overflow, max_entries=max_entries, min_entries=min_entries)

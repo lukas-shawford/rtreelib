@@ -46,6 +46,11 @@ class Rect:
     def area(self) -> float:
         return self.width * self.height
 
+    def centroid(self) -> (float, float):
+        cx = (self.min_x + self.max_x) / 2
+        cy = (self.min_y + self.max_y) / 2
+        return cx, cy
+
 
 def union(rect1: Rect, rect2: Rect) -> Rect:
     if rect1 is None:

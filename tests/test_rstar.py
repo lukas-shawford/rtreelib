@@ -2,8 +2,8 @@ from unittest import TestCase
 from unittest.mock import patch
 from rtreelib import Rect, RTree, RTreeNode, RTreeEntry
 from rtreelib.strategies.rstar import (
-    rstar_choose_leaf, least_overlap_enlargement, get_possible_divisions, choose_split_axis, choose_split_index,
-    rstar_split, get_rstar_stat, EntryDistribution)
+    RStarTree, rstar_choose_leaf, least_overlap_enlargement, get_possible_divisions, choose_split_axis,
+    choose_split_index, rstar_split, get_rstar_stat, EntryDistribution)
 
 
 class TestRStar(TestCase):
@@ -497,3 +497,26 @@ class TestRStar(TestCase):
         self.assertCountEqual([node_ac, node_b], tree.get_leaves())
         # Assert leaf entries
         self.assertCountEqual([entry_a, entry_b, entry_c], tree.get_leaf_entries())
+
+    def test_rstar_insert(self):
+        # Arrange
+        t = RStarTree(max_entries=2)
+        r1 = Rect(0, 0, 3, 2)
+        r2 = Rect(2, 1, 5, 3)
+        r3 = Rect(6, 6, 8, 8)
+        r4 = Rect(7, 7, 10, 9)
+        t.root = RTreeNode(t, is_leaf=False)
+        entry_a = RTreeEntry(r1, data='a')
+        entry_b = RTreeEntry(r2, data='b')
+        entry_c = RTreeEntry(r3, data='c')
+        entry_d = RTreeEntry(r4, data='d')
+        n1 = RTreeNode(t, is_leaf=True, parent=t.root, entries=[entry_a, entry_b])
+        n2 = RTreeNode(t, is_leaf=True, parent=t.root, entries=[entry_c, entry_d])
+        e1 = RTreeEntry(Rect(0, 0, 5, 3), child=n1)
+        e2 = RTreeEntry(Rect(6, 6, 10, 9), child=n2)
+        t.root.entries = [e1, e2]
+        # Rectangle being imported
+        r5 = Rect(4, 2, 6, 4)
+
+        # Act
+        t.insert('e', r5)

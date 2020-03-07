@@ -9,30 +9,10 @@ import math
 import itertools
 from typing import List, TypeVar
 from ..rtree import RTreeBase, RTreeEntry, RTreeNode, DEFAULT_MAX_ENTRIES
-from rtreelib.models import Rect, union_all
-from .base import least_area_enlargement
+from rtreelib.models import Rect
+from .base import insert, least_area_enlargement, adjust_tree_strategy
 
 T = TypeVar('T')
-
-
-def insert(tree: RTreeBase[T], data: T, rect: Rect) -> RTreeEntry[T]:
-    """
-    Strategy for inserting a new entry into the tree. This makes use of the choose_leaf strategy to find an
-    appropriate leaf node where the new entry should be inserted. If the node is overflowing after inserting the entry,
-    the node is split using the split_node strategy. The tree is balanced after insertion by calling adjust_tree.
-    :param tree: R-tree instance
-    :param data: Entry data
-    :param rect: Bounding rectangle
-    :return: RTreeEntry instance for the newly-inserted entry.
-    """
-    entry = RTreeEntry(rect, data=data)
-    node = tree.choose_leaf(tree, entry)
-    node.entries.append(entry)
-    split_node = None
-    if len(node.entries) > tree.max_entries:
-        split_node = tree.split_node(tree, node)
-    tree.adjust_tree(tree, node, split_node)
-    return entry
 
 
 def guttman_choose_leaf(tree: RTreeBase[T], entry: RTreeEntry[T]) -> RTreeNode[T]:
@@ -45,26 +25,6 @@ def guttman_choose_leaf(tree: RTreeBase[T], entry: RTreeEntry[T]) -> RTreeNode[T
         e: RTreeEntry = least_area_enlargement(node.entries, entry.rect)
         node = e.child
     return node
-
-
-def adjust_tree_strategy(tree: RTreeBase[T], node: RTreeNode[T], split_node: RTreeNode[T] = None) -> None:
-    """
-    Ascend from a leaf node to the root, adjusting covering rectangles and propagating node splits as necessary.
-    """
-    while not node.is_root:
-        parent = node.parent
-        node.parent_entry.rect = union_all([entry.rect for entry in node.entries])
-        if split_node is not None:
-            rect = union_all([e.rect for e in split_node.entries])
-            entry = RTreeEntry(rect, child=split_node)
-            parent.entries.append(entry)
-            if len(parent.entries) > tree.max_entries:
-                split_node = tree.split_node(tree, parent)
-            else:
-                split_node = None
-        node = parent
-    if split_node is not None:
-        tree.grow_tree([node, split_node])
 
 
 def quadratic_split(tree: RTreeBase[T], node: RTreeNode[T]) -> RTreeNode[T]:
@@ -172,4 +132,4 @@ class RTreeGuttman(RTreeBase[T]):
         :param min_entries: Minimum number of entries per node. Defaults to ceil(max_entries/2).
         """
         super().__init__(insert=insert, choose_leaf=guttman_choose_leaf, adjust_tree=adjust_tree_strategy,
-                         split_node=quadratic_split, max_entries=max_entries, min_entries=min_entries)
+                         overflow_strategy=quadratic_split, max_entries=max_entries, min_entries=min_entries)
