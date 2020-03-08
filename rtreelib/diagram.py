@@ -18,13 +18,13 @@ except ImportError:
     raise RuntimeError("The following libraries are required to create R-Tree diagrams: matplotlib, pydot, tqdm")
 
 
-def create_rtree_diagram(tree: RTreeBase, title=None, filename_ps=None, filename_dot=None, include_images=True):
+def create_rtree_diagram(tree: RTreeBase, title=None, filename_png=None, filename_dot=None, include_images=True):
     """
     Creates an R-Tree diagram for visualizing the tree structure using graphviz. Note that the diagram may be large and
     take a while to generate, especially if include_images is set to True.
     :param tree: R-Tree to draw
     :param title: Optional title
-    :param filename_ps: Optional filename for the generated diagram. If not provided, a temporary filename will be
+    :param filename_png: Optional filename for the generated diagram. If not provided, a temporary filename will be
         generated.
     :param filename_dot: Optional filename for the 'dot' graphviz file that will be used as an intermediate file for
         creating the diagram. If not provided, a temporary filename will be generated.
@@ -36,11 +36,11 @@ def create_rtree_diagram(tree: RTreeBase, title=None, filename_ps=None, filename
     graph.set_node_defaults(shape='plaintext')
     _draw_rtree_nodes(graph, tree, include_images)
     _draw_rtree_edges(graph, tree.root)
-    filename_ps = filename_ps or tempfile.mkstemp('.ps')[1]
-    graph.write(filename_ps, format='ps')
+    filename_png = filename_png or tempfile.mkstemp('.png')[1]
+    graph.write(filename_png, format='png')
     filename_dot = filename_dot or tempfile.mkstemp('.dot')[1]
     graph.write(filename_dot)
-    _invoke_file(filename_ps)
+    _invoke_file(filename_png)
 
 
 def plot_rtree(tree: RTreeBase, filename=None, show=True, highlight_node=None, highlight_entry=None):
