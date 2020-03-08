@@ -4,22 +4,63 @@ https://infolab.usc.edu/csci599/Fall2001/paper/rstar-tree.pdf
 """
 
 import math
-from typing import List, TypeVar, Iterable, Callable, Any, Dict
+from typing import List, TypeVar, Iterable, Callable, Any, Dict, Optional
 from ..rtree import RTreeBase, RTreeEntry, RTreeNode, DEFAULT_MAX_ENTRIES, EPSILON, EntryDivision, EntryOrdering
-from rtreelib.models import Rect, Axis, Dimension, EntryDistribution, RStarStat
+from rtreelib.models import Rect, Axis, Dimension, EntryDistribution, RStarStat, union_all
 from .base import insert, least_area_enlargement, adjust_tree_strategy
 
 T = TypeVar('T')
 
 
 def rstar_overflow(tree: RTreeBase[T], node: RTreeNode[T]) -> RTreeNode[T]:
+    levels = tree.get_levels()
+    level = len(levels) - 1
+    return _rstar_overflow(tree, node, levels, level)
+
+
+def _rstar_overflow(tree: RTreeBase[T], node: RTreeNode[T], levels: List[List[RTreeNode[T]]], level: int)\
+        -> Optional[RTreeNode[T]]:
     if node.is_root:
         return rstar_split(tree, node)
-    return reinsert(tree, node)
+    reinsert(tree, node, levels, level)
+    return None
 
 
-def reinsert(tree: RTreeBase[T], node: RTreeNode[T]) -> RTreeNode[T]:
-    pass
+def reinsert(tree: RTreeBase[T], node: RTreeNode[T], levels: List[List[RTreeNode[T]]], level: int):
+    node_centroid = node.get_bounding_rect().centroid()
+    sorted_entries = sorted(node.entries, key=lambda e: _dist(e.rect.centroid(), node_centroid))
+    p = math.ceil(0.3 * len(sorted_entries))
+    entries_to_reinsert = sorted_entries[:p]
+    node.entries = [e for e in node.entries if e not in entries_to_reinsert]
+    node.parent_entry.rect = union_all([entry.rect for entry in node.entries])
+    for e in entries_to_reinsert:
+        _reinsert_entry(tree, e, levels, level)
+
+
+def _dist(p1, p2):
+    x1, y1 = p1
+    x2, y2 = p2
+    return math.sqrt((x2-x1)**2 + (y2-y1)**2)
+
+
+def _reinsert_entry(tree: RTreeBase[T], entry: RTreeEntry[T], levels: List[List[RTreeNode[T]]], level: int):
+    node = _choose_subtree(entry.rect, levels, level)
+    node.entries.append(entry)
+    split_node = None
+    if len(node.entries) > tree.max_entries:
+        split_node = rstar_split(tree, node)
+    tree.adjust_tree(tree, node, split_node)
+
+
+def _choose_subtree(rect: Rect, levels: List[List[RTreeNode[T]]], level: int) -> RTreeNode[T]:
+    is_leaf_level = level == len(levels) - 1
+    nodes = levels[level]
+    entries = [entry for node in nodes for entry in node.entries]
+    if is_leaf_level:
+        e = least_overlap_enlargement(entries, rect)
+    else:
+        e = least_area_enlargement(entries, rect)
+    return next(node for node in nodes if e in node.entries)
 
 
 def rstar_choose_leaf(tree: RTreeBase[T], entry: RTreeEntry[T]) -> RTreeNode[T]:
@@ -41,17 +82,6 @@ def rstar_choose_leaf(tree: RTreeBase[T], entry: RTreeEntry[T]) -> RTreeNode[T]:
             e = least_area_enlargement(node.entries, entry.rect)
         node = e.child
     return node
-
-
-def _choose_subtree(levels: List[List[RTreeNode[T]]], level: int, rect: Rect) -> RTreeNode[T]:
-    is_leaf_level = level == len(levels) - 1
-    nodes = levels[level]
-    entries = [entry for node in nodes for entry in node.entries]
-    if is_leaf_level:
-        e = least_overlap_enlargement(entries, rect)
-    else:
-        e = least_area_enlargement(entries, rect)
-    return next(node for node in nodes if e in node.entries)
 
 
 def _are_children_leaves(node: RTreeNode[T]) -> bool:
