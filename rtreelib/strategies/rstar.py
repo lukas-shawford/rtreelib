@@ -10,23 +10,62 @@ from rtreelib.models import Rect, Axis, Dimension, EntryDistribution, RStarStat,
 from .base import insert, least_area_enlargement, adjust_tree_strategy
 
 T = TypeVar('T')
+_levels: Optional[List[List[RTreeNode[T]]]] = None
+_reinsert_cache: Optional[Dict[int, bool]] = None
+
+
+def rstar_insert(tree: RTreeBase[T], data: T, rect: Rect) -> RTreeEntry[T]:
+    """
+    Strategy for inserting a new entry into the tree. This makes use of the choose_leaf strategy to find an
+    appropriate leaf node where the new entry should be inserted. If the node is overflowing after inserting the entry,
+    then overflow_strategy is invoked (either to split the node in case of Guttman, or do a combination of forced
+    reinsert and/or split in the case of R*).
+    :param tree: R-tree instance
+    :param data: Entry data
+    :param rect: Bounding rectangle
+    :return: RTreeEntry instance for the newly-inserted entry.
+    """
+    global _levels
+    global _reinsert_cache
+    e = insert(tree, data, rect)
+    _clear_cache()
+    return e
 
 
 def rstar_overflow(tree: RTreeBase[T], node: RTreeNode[T]) -> RTreeNode[T]:
-    levels = tree.get_levels()
-    level = len(levels) - 1
-    return _rstar_overflow(tree, node, levels, level)
+    global _levels
+    if not _levels:
+        _init_cache(tree)
+    level = len(_levels) - 1
+    return _rstar_overflow(tree, node, level)
 
 
-def _rstar_overflow(tree: RTreeBase[T], node: RTreeNode[T], levels: List[List[RTreeNode[T]]], level: int)\
+def _init_cache(tree: RTreeBase[T]):
+    global _levels
+    global _reinsert_cache
+    _levels = tree.get_levels()
+    _reinsert_cache = dict()
+
+
+def _clear_cache():
+    global _levels
+    global _reinsert_cache
+    _levels = None
+    _reinsert_cache = None
+
+
+def _rstar_overflow(tree: RTreeBase[T], node: RTreeNode[T], level: int)\
         -> Optional[RTreeNode[T]]:
-    if node.is_root:
+    global _reinsert_cache
+    if node.is_root or _reinsert_cache.get(level, False):
         return rstar_split(tree, node)
-    reinsert(tree, node, levels, level)
+    reinsert(tree, node, level)
     return None
 
 
-def reinsert(tree: RTreeBase[T], node: RTreeNode[T], levels: List[List[RTreeNode[T]]], level: int):
+def reinsert(tree: RTreeBase[T], node: RTreeNode[T], level: int):
+    global _reinsert_cache
+    _reinsert_cache[level] = True
     node_centroid = node.get_bounding_rect().centroid()
     sorted_entries = sorted(node.entries, key=lambda e: _dist(e.rect.centroid(), node_centroid))
     p = math.ceil(0.3 * len(sorted_entries))
@@ -34,7 +73,7 @@ def reinsert(tree: RTreeBase[T], node: RTreeNode[T], levels: List[List[RTreeNode
     node.entries = [e for e in node.entries if e not in entries_to_reinsert]
     node.parent_entry.rect = union_all([entry.rect for entry in node.entries])
     for e in entries_to_reinsert:
-        _reinsert_entry(tree, e, levels, level)
+        _reinsert_entry(tree, e, level)
 
 
 def _dist(p1, p2):
@@ -43,8 +82,8 @@ def _dist(p1, p2):
     return math.sqrt((x2-x1)**2 + (y2-y1)**2)
 
 
-def _reinsert_entry(tree: RTreeBase[T], entry: RTreeEntry[T], levels: List[List[RTreeNode[T]]], level: int):
-    node = _choose_subtree(entry.rect, levels, level)
+def _reinsert_entry(tree: RTreeBase[T], entry: RTreeEntry[T], level: int):
+    node = _choose_subtree(entry.rect, level)
     node.entries.append(entry)
     split_node = None
     if len(node.entries) > tree.max_entries:
@@ -52,9 +91,9 @@ def _reinsert_entry(tree: RTreeBase[T], entry: RTreeEntry[T], levels: List[List[
     tree.adjust_tree(tree, node, split_node)
 
 
-def _choose_subtree(rect: Rect, levels: List[List[RTreeNode[T]]], level: int) -> RTreeNode[T]:
-    is_leaf_level = level == len(levels) - 1
-    nodes = levels[level]
+def _choose_subtree(rect: Rect, level: int) -> RTreeNode[T]:
+    is_leaf_level = level == len(_levels) - 1
+    nodes = _levels[level]
     entries = [entry for node in nodes for entry in node.entries]
     if is_leaf_level:
         e = least_overlap_enlargement(entries, rect)
@@ -243,5 +282,5 @@ class RStarTree(RTreeBase[T]):
         :param max_entries: Maximum number of entries per node.
         :param min_entries: Minimum number of entries per node. Defaults to ceil(max_entries/2).
         """
-        super().__init__(insert=insert, choose_leaf=rstar_choose_leaf, adjust_tree=adjust_tree_strategy,
+        super().__init__(insert=rstar_insert, choose_leaf=rstar_choose_leaf, adjust_tree=adjust_tree_strategy,
                          overflow_strategy=rstar_overflow, max_entries=max_entries, min_entries=min_entries)

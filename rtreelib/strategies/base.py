@@ -8,9 +8,6 @@ from ..rtree import RTreeBase, RTreeEntry, RTreeNode, EPSILON
 from rtreelib.models import Rect, union_all
 
 
-# TEMP
-from rtreelib.diagram import create_rtree_diagram
-
 T = TypeVar('T')
 
 
