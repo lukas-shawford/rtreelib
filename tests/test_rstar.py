@@ -2,8 +2,8 @@ from unittest import TestCase
 from unittest.mock import patch
 from rtreelib import Rect, RTree, RTreeNode, RTreeEntry
 from rtreelib.strategies.rstar import (
-    RStarTree, rstar_choose_leaf, least_overlap_enlargement, get_possible_divisions, choose_split_axis,
-    choose_split_index, rstar_split, get_rstar_stat, EntryDistribution)
+    RStarTree, rstar_insert, rstar_overflow, rstar_choose_leaf, least_overlap_enlargement, get_possible_divisions,
+    choose_split_axis, choose_split_index, rstar_split, get_rstar_stat, EntryDistribution)
 
 
 class TestRStar(TestCase):
@@ -498,25 +498,51 @@ class TestRStar(TestCase):
         # Assert leaf entries
         self.assertCountEqual([entry_a, entry_b, entry_c], tree.get_leaf_entries())
 
-    def test_rstar_insert(self):
+    def test_rstar_overflow_split_root(self):
+        """
+        When the root node overflows, the root node should be split and the tree should grow a level. Forced reinsert
+        should not occur at the root level.
+        """
         # Arrange
-        t = RStarTree(max_entries=2)
+        t = RStarTree(max_entries=3)
         r1 = Rect(0, 0, 3, 2)
-        r2 = Rect(2, 1, 5, 3)
-        r3 = Rect(6, 6, 8, 8)
-        r4 = Rect(7, 7, 10, 9)
-        t.root = RTreeNode(t, is_leaf=False)
+        r2 = Rect(7, 7, 10, 9)
+        r3 = Rect(2, 1, 5, 3)
         entry_a = RTreeEntry(r1, data='a')
         entry_b = RTreeEntry(r2, data='b')
         entry_c = RTreeEntry(r3, data='c')
-        entry_d = RTreeEntry(r4, data='d')
-        n1 = RTreeNode(t, is_leaf=True, parent=t.root, entries=[entry_a, entry_b])
-        n2 = RTreeNode(t, is_leaf=True, parent=t.root, entries=[entry_c, entry_d])
-        e1 = RTreeEntry(Rect(0, 0, 5, 3), child=n1)
-        e2 = RTreeEntry(Rect(6, 6, 10, 9), child=n2)
-        t.root.entries = [e1, e2]
-        # Rectangle being imported
-        r5 = Rect(4, 2, 6, 4)
+        t.root.entries = [entry_a, entry_b, entry_c]
+        # Arrange entry being inserted. Since the root node is at max capacity, this entry should cause the root
+        # to overflow.
+        r4 = Rect(6, 6, 8, 8)
 
         # Act
-        t.insert('e', r5)
+        entry_d = t.insert('d', r4)
+
+        # Assert
+        # Root node should no longer be a leaf node (but should still be root)
+        self.assertFalse(t.root.is_leaf)
+        self.assertTrue(t.root.is_root)
+        # Root node bounding box should encompass all entries
+        self.assertEqual(Rect(0, 0, 10, 9), t.root.get_bounding_rect())
+        # Root node should have 2 child entries
+        self.assertEqual(2, len(t.root.entries))
+        e1 = t.root.entries[0]
+        e2 = t.root.entries[1]
+        # e1 bounding box should encompass entries [a, c]
+        self.assertEqual(Rect(0, 0, 5, 3), e1.rect)
+        # e2 bounding box should encompass entries [b ,d]
+        self.assertEqual(Rect(6, 6, 10, 9), e2.rect)
+        # Ensure children nodes of e1 and e2 and leaf nodes
+        leaf_node_1 = e1.child
+        leaf_node_2 = e2.child
+        self.assertIsNotNone(leaf_node_1)
+        self.assertIsNotNone(leaf_node_2)
+        self.assertTrue(leaf_node_1.is_leaf)
+        self.assertTrue(leaf_node_2.is_leaf)
+        # Leaf node 1 should contain entries [a, c]
+        self.assertEqual(Rect(0, 0, 5, 3), leaf_node_1.get_bounding_rect())
+        self.assertCountEqual([entry_a, entry_c], leaf_node_1.entries)
+        # Leaf node 2 should contain entries [b, d]
+        self.assertEqual(Rect(6, 6, 10, 9), leaf_node_2.get_bounding_rect())
+        self.assertCountEqual([entry_b, entry_d], leaf_node_2.entries)

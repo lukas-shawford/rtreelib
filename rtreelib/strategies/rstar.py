@@ -44,7 +44,7 @@ def rstar_overflow(tree: RTreeBase[T], node: RTreeNode[T]) -> RTreeNode[T]:
         _cache.levels = tree.get_levels()
         _cache.reinsert = dict()
     level = len(_cache.levels) - 1
-    return _rstar_overflow(tree, node, level)
+    _rstar_overflow(tree, node, level)
 
 
 def _rstar_overflow(tree: RTreeBase[T], node: RTreeNode[T], level: int) -> Optional[RTreeNode[T]]:
@@ -52,8 +52,10 @@ def _rstar_overflow(tree: RTreeBase[T], node: RTreeNode[T], level: int) -> Optio
     # If the level is not the root level and this is the first call of _rstar_overflow on the given level, then
     # perform a forced reinsert of a subset of the entries in the node. Otherwise, do a regular node split.
     if node.is_root or _cache.reinsert.get(level, False):
-        return rstar_split(tree, node)
-    reinsert(tree, node, level)
+        split_node = rstar_split(tree, node)
+        tree.adjust_tree(tree, node, split_node)
+    else:
+        reinsert(tree, node, level)
     return None
 
 
