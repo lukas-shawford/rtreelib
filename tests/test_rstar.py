@@ -1,9 +1,12 @@
+from typing import List, TypeVar
 from unittest import TestCase
 from unittest.mock import patch
 from rtreelib import Rect, RTree, RTreeNode, RTreeEntry
 from rtreelib.strategies.rstar import (
-    RStarTree, rstar_insert, rstar_overflow, rstar_choose_leaf, least_overlap_enlargement, get_possible_divisions,
+    RStarTree, rstar_overflow, rstar_choose_leaf, least_overlap_enlargement, get_possible_divisions,
     choose_split_axis, choose_split_index, rstar_split, get_rstar_stat, EntryDistribution)
+
+T = TypeVar('T')
 
 
 class TestRStar(TestCase):
@@ -498,6 +501,129 @@ class TestRStar(TestCase):
         # Assert leaf entries
         self.assertCountEqual([entry_a, entry_b, entry_c], tree.get_leaf_entries())
 
+    @patch('rtreelib.strategies.rstar.rstar_split')
+    def test_rstar_overflow_reinsert_without_split(self, rstar_split_mock):
+        """
+        Tests R* overflow scenario that results in forced reinsert of some entries into a different node, but without
+        any additional overflows/splits occurring.
+        """
+        # Arrange
+        t = RStarTree(max_entries=3)
+        r1 = Rect(0, 0, 1, 1)
+        r2 = Rect(9, 0, 10, 1)
+        r3 = Rect(0, 5, 1, 6)
+        r4 = Rect(9, 5, 10, 6)
+        r5 = Rect(3, 2, 10, 4)
+        t.root = RTreeNode(t, is_leaf=False)
+        entry_a = RTreeEntry(r1, data='a')
+        entry_b = RTreeEntry(r2, data='b')
+        entry_c = RTreeEntry(r3, data='c')
+        entry_d = RTreeEntry(r4, data='d')
+        entry_e = RTreeEntry(r5, data='e')
+        n1 = RTreeNode(t, is_leaf=True, parent=t.root, entries=[entry_a, entry_c])
+        n2 = RTreeNode(t, is_leaf=True, parent=t.root, entries=[entry_b, entry_d, entry_e])
+        e1 = RTreeEntry(Rect(0, 0, 1, 6), child=n1)
+        e2 = RTreeEntry(Rect(3, 0, 10, 6), child=n2)
+        t.root.entries = [e1, e2]
+        # Arrange entry being inserted
+        r6 = Rect(2, 1, 3, 2)
+        entry_f = RTreeEntry(r6, data='f')
+        # Manually insert the new entry into node n2, causing it to be overfull.
+        n2.entries.append(entry_f)
+        # Ensure preconditions:
+        # At this point, the root node entries will still have their old covering rectangles.
+        self.assertEqual(Rect(0, 0, 1, 6), e1.rect)
+        self.assertEqual(Rect(3, 0, 10, 6), e2.rect)
+        # At this point, the root node will only have 2 entries for e1 and e2
+        self.assertEqual([e1, e2], t.root.entries)
+
+        # Act
+        rstar_overflow(t, n2)
+
+        # Assert
+        # Ensure rstar_split was not invoked. In this scenario, it should do a forced reinsert instead (and the reinsert
+        # should not result in any additional splits).
+        rstar_split_mock.assert_not_called()
+        # Ensure the root node still has only 2 entries, and their children are still the nodes n1 and n2.
+        self.assertEqual([e1, e2], t.root.entries)
+        self.assertEqual(n1, e1.child)
+        self.assertEqual(n2, e2.child)
+        # Forced insert should have resulted in entry f getting reinserted into node n1 (was previously in n2).
+        # Ensure node n1 now has entries [a, c, f].
+        self.assertCountEqual([entry_a, entry_c, entry_f], n1.entries)
+        # Ensure node n1 bounding box accommodates entries [a, c, f]
+        self.assertEqual(Rect(0, 0, 3, 6), n1.get_bounding_rect())
+        # Remaining entries [b, d, e] should be in node n2.
+        self.assertCountEqual([entry_b, entry_d, entry_e], n2.entries)
+        self.assertEqual(Rect(3, 0, 10, 6), n2.get_bounding_rect())
+        # Ensure nodes n1 and n2 are leaf nodes, and there are no additional levels in the tree.
+        self.assertTrue(n1.is_leaf)
+        self.assertTrue(n2.is_leaf)
+        self.assertEqual(2, len(t.get_levels()))
+
+    def test_rstar_overflow_reinsert_with_split(self):
+        """
+        Tests R* overflow scenario that results in forced reinsert of some entries into a different node which is
+        already at capacity, causing it to overflow. In this scenario, the second overflow at the same level should
+        result in a regular split, not another forced reinsert.
+        """
+        # Arrange
+        t = RStarTree(max_entries=3)
+        r1 = Rect(0, 0, 1, 1)
+        r2 = Rect(0, 2, 1, 3)
+        r3 = Rect(9, 0, 10, 1)
+        r4 = Rect(0, 5, 1, 6)
+        r5 = Rect(9, 5, 10, 6)
+        r6 = Rect(3, 2, 10, 4)
+        t.root = RTreeNode(t, is_leaf=False)
+        entry_a = RTreeEntry(r1, data='a')
+        entry_b = RTreeEntry(r2, data='b')
+        entry_c = RTreeEntry(r3, data='c')
+        entry_d = RTreeEntry(r4, data='d')
+        entry_e = RTreeEntry(r5, data='e')
+        entry_f = RTreeEntry(r6, data='f')
+        n1 = RTreeNode(t, is_leaf=True, parent=t.root, entries=[entry_a, entry_b, entry_d])
+        n2 = RTreeNode(t, is_leaf=True, parent=t.root, entries=[entry_c, entry_e, entry_f])
+        e1 = RTreeEntry(Rect(0, 0, 1, 6), child=n1)
+        e2 = RTreeEntry(Rect(3, 0, 10, 6), child=n2)
+        t.root.entries = [e1, e2]
+        # Arrange entry being inserted
+        r7 = Rect(2, 1, 3, 2)
+        entry_g = RTreeEntry(r7, data='g')
+        # Manually insert the new entry into node n2, causing it to be overfull.
+        n2.entries.append(entry_g)
+        # Ensure preconditions:
+        # At this point, the root node entries will still have their old covering rectangles.
+        self.assertEqual(Rect(0, 0, 1, 6), e1.rect)
+        self.assertEqual(Rect(3, 0, 10, 6), e2.rect)
+        # At this point, the root node will only have 2 entries for e1 and e2
+        self.assertEqual([e1, e2], t.root.entries)
+
+        # Act
+        rstar_overflow(t, n2)
+
+        # Assert
+        # Root node should now have 3 entries (split should have occurred)
+        self.assertEqual(3, len(t.root.entries))
+        # There should still be 2 levels in the tree (root node should not have split)
+        levels = t.get_levels()
+        self.assertEqual(2, len(levels))
+        # There should be 3 nodes at the leaf level
+        leaf_nodes = levels[1]
+        self.assertEqual(3, len(leaf_nodes))
+        # One of the nodes should have entries [a, b, g] and with the correct bounding rectangle
+        n1 = next((n for n in leaf_nodes if set(_get_leaf_node_data(n)) == {'a', 'b', 'g'}))
+        self.assertEqual(Rect(0, 0, 3, 3), n1.get_bounding_rect())
+        self.assertEqual(Rect(0, 0, 3, 3), n1.parent_entry.rect)
+        # Another node should have entries [c, e] and with the correct bounding rectangle
+        n2 = next((n for n in leaf_nodes if set(_get_leaf_node_data(n)) == {'c', 'e'}))
+        self.assertEqual(Rect(9, 0, 10, 6), n2.get_bounding_rect())
+        self.assertEqual(Rect(9, 0, 10, 6), n2.parent_entry.rect)
+        # Last node should have entries [d, f] and with the correct bounding rectangle
+        n3 = next((n for n in leaf_nodes if set(_get_leaf_node_data(n)) == {'d', 'f'}))
+        self.assertEqual(Rect(0, 2, 10, 6), n3.get_bounding_rect())
+        self.assertEqual(Rect(0, 2, 10, 6), n3.parent_entry.rect)
+
     def test_rstar_overflow_split_root(self):
         """
         When the root node overflows, the root node should be split and the tree should grow a level. Forced reinsert
@@ -546,3 +672,13 @@ class TestRStar(TestCase):
         # Leaf node 2 should contain entries [b, d]
         self.assertEqual(Rect(6, 6, 10, 9), leaf_node_2.get_bounding_rect())
         self.assertCountEqual([entry_b, entry_d], leaf_node_2.entries)
+
+
+def _get_leaf_node_data(node: RTreeNode[T]) -> List[T]:
+    """
+    Returns the data from a leaf node's entries as a list
+    :param node: Leaf node in an R-tree
+    :return: Data elements in the entries contained in the leaf node
+    """
+    assert node.is_leaf
+    return [e.data for e in node.entries]

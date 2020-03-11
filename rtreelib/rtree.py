@@ -1,6 +1,6 @@
 import math
 from functools import partial
-from typing import TypeVar, Generic, List, Iterable, Callable, Optional, Tuple
+from typing import TypeVar, Generic, List, Iterable, Callable, Optional, Tuple, Any
 from rtreelib.models.rect import Rect, union_all
 
 T = TypeVar('T')
@@ -108,6 +108,9 @@ class RTreeBase(Generic[T]):
         self.adjust_tree = adjust_tree
         self.overflow_strategy = overflow_strategy
         self.root = RTreeNode(self, True)
+        # Initialize an untyped "_cache" property that implementations can use for any purpose. R* uses this to keep
+        # track of certain information when doing a forced reinsert.
+        self._cache: Any = None
 
     def insert(self, data: T, rect: Rect) -> RTreeEntry[T]:
         """

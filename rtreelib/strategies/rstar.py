@@ -10,9 +10,9 @@ from rtreelib.models import Rect, Axis, Dimension, EntryDistribution, RStarStat,
 from .base import insert, least_area_enlargement, adjust_tree_strategy
 
 T = TypeVar('T')
-_cache: Optional[RStarCache] = None
 
 
+# noinspection PyProtectedMember
 def rstar_insert(tree: RTreeBase[T], data: T, rect: Rect) -> RTreeEntry[T]:
     """
     Strategy for inserting a new entry into the R*-tree. R* insert is identical to the Guttman insert, except for
@@ -23,12 +23,12 @@ def rstar_insert(tree: RTreeBase[T], data: T, rect: Rect) -> RTreeEntry[T]:
     :param rect: Bounding rectangle
     :return: RTreeEntry instance for the newly-inserted entry.
     """
-    global _cache
     e = insert(tree, data, rect)
-    _cache = None
+    tree._cache = None
     return e
 
 
+# noinspection PyProtectedMember
 def rstar_overflow(tree: RTreeBase[T], node: RTreeNode[T]) -> RTreeNode[T]:
     """
     R* overflow treatment. The outer method initializes a cache to store information about the tree's current state,
@@ -38,20 +38,24 @@ def rstar_overflow(tree: RTreeBase[T], node: RTreeNode[T]) -> RTreeNode[T]:
     :param node: Overflowing node
     :return: New node resulting from a split, or None
     """
-    global _cache
-    if not _cache:
-        _cache = RStarCache()
-        _cache.levels = tree.get_levels()
-        _cache.reinsert = dict()
-    level = len(_cache.levels) - 1
-    _rstar_overflow(tree, node, level)
+    if not tree._cache:
+        tree._cache = _init_cache(tree)
+    level = len(tree._cache.levels) - 1
+    return _rstar_overflow(tree, node, level)
 
 
+def _init_cache(tree: RTreeBase[T]) -> RStarCache:
+    cache = RStarCache()
+    cache.levels = tree.get_levels()
+    cache.reinsert = dict()
+    return cache
+
+
+# noinspection PyProtectedMember
 def _rstar_overflow(tree: RTreeBase[T], node: RTreeNode[T], level: int) -> Optional[RTreeNode[T]]:
-    global _cache
     # If the level is not the root level and this is the first call of _rstar_overflow on the given level, then
     # perform a forced reinsert of a subset of the entries in the node. Otherwise, do a regular node split.
-    if node.is_root or _cache.reinsert.get(level, False):
+    if node.is_root or tree._cache.reinsert.get(level, False):
         split_node = rstar_split(tree, node)
         tree.adjust_tree(tree, node, split_node)
     else:
@@ -59,6 +63,7 @@ def _rstar_overflow(tree: RTreeBase[T], node: RTreeNode[T], level: int) -> Optio
     return None
 
 
+# noinspection PyProtectedMember
 def reinsert(tree: RTreeBase[T], node: RTreeNode[T], level: int):
     """
     Performs a forced reinsert on a subset of the entries in the given node.
@@ -67,11 +72,9 @@ def reinsert(tree: RTreeBase[T], node: RTreeNode[T], level: int):
     :param level: Level of the node in the tree. Forced reinsert is done at most once per level during an insert
         operation.
     """
-    global _cache
-
     # Indicate that we have performed a forced reinsert at the current level. Forced reinsert is done at most once per
     # level during an insert operation.
-    _cache.reinsert[level] = True
+    tree._cache.reinsert[level] = True
 
     # Sort the entries in order of increasing distance from the node's centroid
     node_centroid = node.get_bounding_rect().centroid()
@@ -98,7 +101,7 @@ def _dist(p1, p2):
 
 
 def _reinsert_entry(tree: RTreeBase[T], entry: RTreeEntry[T], level: int):
-    node = _choose_subtree_reinsert(entry.rect, level)
+    node = _choose_subtree_reinsert(tree, entry.rect, level)
     node.entries.append(entry)
     split_node = None
     if len(node.entries) > tree.max_entries:
@@ -106,7 +109,8 @@ def _reinsert_entry(tree: RTreeBase[T], entry: RTreeEntry[T], level: int):
     tree.adjust_tree(tree, node, split_node)
 
 
-def _choose_subtree_reinsert(rect: Rect, level: int) -> RTreeNode[T]:
+# noinspection PyProtectedMember
+def _choose_subtree_reinsert(tree: RTreeBase[T], rect: Rect, level: int) -> RTreeNode[T]:
     """
     Helper method for choosing a subtree during the reinsert operation. While similar to rstar_choose_leaf, this
     method allows for an entry to be inserted at any node in an arbitrary level of the tree.
@@ -114,8 +118,8 @@ def _choose_subtree_reinsert(rect: Rect, level: int) -> RTreeNode[T]:
     :param level: Level of the tree where the entry is being reinserted.
     :return: Node where the entry should be reinserted.
     """
-    is_leaf_level = level == len(_cache.levels) - 1
-    nodes = _cache.levels[level]
+    is_leaf_level = level == len(tree._cache.levels) - 1
+    nodes = tree._cache.levels[level]
     entries = [entry for node in nodes for entry in node.entries]
     if is_leaf_level:
         e = least_overlap_enlargement(entries, rect)
