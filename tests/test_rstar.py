@@ -1,7 +1,7 @@
 from typing import List, TypeVar
 from unittest import TestCase
 from unittest.mock import patch
-from rtreelib import Rect, RTree, RTreeNode, RTreeEntry
+from rtreelib import Rect, RTreeNode, RTreeEntry
 from rtreelib.strategies.rstar import (
     RStarTree, rstar_overflow, rstar_choose_leaf, least_overlap_enlargement, get_possible_divisions,
     choose_split_axis, choose_split_index, rstar_split, get_rstar_stat, EntryDistribution)
@@ -50,7 +50,7 @@ class TestRStar(TestCase):
         the level just above a leaf.
         """
         # Arrange
-        tree = RTree()
+        tree = RStarTree()
         leaf = RTreeNode(tree, is_leaf=True)
         root = RTreeNode(tree, is_leaf=False, entries=[RTreeEntry(Rect(0, 0, 0, 0), child=leaf)])
         tree.root = root
@@ -72,7 +72,7 @@ class TestRStar(TestCase):
         levels higher than the one just above the leaf level.
         """
         # Arrange
-        tree = RTree()
+        tree = RStarTree()
         leaf = RTreeNode(tree, is_leaf=True)
         intermediate = RTreeNode(tree, is_leaf=False, entries=[RTreeEntry(Rect(0, 0, 0, 0), child=leaf)])
         intermediate_entry = RTreeEntry(Rect(0, 0, 0, 0), child=intermediate)
@@ -97,7 +97,7 @@ class TestRStar(TestCase):
         enlargement strategies.
         """
         # Arrange
-        tree = RTree()
+        tree = RStarTree()
         root = RTreeNode(tree, is_leaf=True, entries=[RTreeEntry(Rect(0, 0, 1, 1))])
         tree.root = root
         e = RTreeEntry(Rect(0, 0, 0, 0))
@@ -327,7 +327,7 @@ class TestRStar(TestCase):
         the resulting structure when calling rstar_split is not necessarily the final structure of the tree.
         """
         # Arrange
-        tree = RTree(min_entries=1, max_entries=2)
+        tree = RStarTree(min_entries=1, max_entries=2)
         a = RTreeEntry(data='a', rect=Rect(0, 0, 7, 2))
         b = RTreeEntry(data='b', rect=Rect(1, 1, 2, 3))
         c = RTreeEntry(data='c', rect=Rect(2, 2, 8, 4))
@@ -368,7 +368,7 @@ class TestRStar(TestCase):
     def test_rstar_insert_empty(self):
         """Tests inserting into an empty tree"""
         # Arrange
-        tree = RTree(min_entries=1, max_entries=3)
+        tree = RStarTree(min_entries=1, max_entries=3)
 
         # Act
         tree.insert('a', Rect(0, 0, 5, 5))
@@ -395,7 +395,7 @@ class TestRStar(TestCase):
     def test_rstar_insert_no_split(self):
         """Tests multiple inserts which do not require a node split"""
         # Arrange
-        tree = RTree(min_entries=1, max_entries=2)
+        tree = RStarTree(min_entries=1, max_entries=2)
 
         # Act
         tree.insert('a', Rect(0, 0, 5, 2))
@@ -420,69 +420,91 @@ class TestRStar(TestCase):
 
     def test_rstar_insert_with_split(self):
         """Complete test of tree structure after performing multiple inserts which require a node split."""
-        # TODO: This test currently uses the default Guttman implementation (since the R*-Tree has not been fully
-        #  implemented yet, so an implementation is not available). Once the R*-Tree implementation is available, this
-        #  test (and all tests in this module) should use it. Further, it would be beneficial to come up with a better
-        #  example where the Guttman implementation results in a different split than R*-Tree, since this test currently
-        #  passes even with Guttman.
-
         # Arrange
-        tree = RTree(min_entries=1, max_entries=2)
+        tree = RStarTree(min_entries=1, max_entries=3)
 
         # Act
-        tree.insert('a', Rect(0, 0, 5, 2))
-        tree.insert('b', Rect(2, 3, 4, 7))
-        tree.insert('c', Rect(3, 1, 7, 4))
+        tree.insert('a', Rect(0, 2, 6, 3))
+        tree.insert('b', Rect(4, 1, 5, 5))
+        tree.insert('c', Rect(2, 4, 7, 5))
+        tree.insert('d', Rect(2, 3, 4, 8))
+        tree.insert('e', Rect(1, 0, 3, 5))
 
         # Assert
         # Root node
         self.assertTrue(tree.root.is_root)
         self.assertFalse(tree.root.is_leaf)
-        self.assertEqual(2, len(tree.root.entries))
-        self.assertEqual(Rect(0, 0, 7, 7), tree.root.get_bounding_rect())
-        # Find parent entry at root level that contains child entries 'a' and 'c' and test its properties
-        parent_ac = next((e for e in tree.root.entries if e.rect == Rect(0, 0, 7, 4)))
-        self.assertIsNone(parent_ac.data)
-        self.assertFalse(parent_ac.is_leaf)
-        self.assertIsNotNone(parent_ac.child)
-        # Test properties of node that contains entries 'a' and 'c'
-        node_ac = parent_ac.child
-        self.assertEqual(Rect(0, 0, 7, 4), node_ac.get_bounding_rect())
-        self.assertFalse(node_ac.is_root)
-        self.assertTrue(node_ac.is_leaf)
-        self.assertEqual(2, len(node_ac.entries))
-        self.assertEqual(tree.root, node_ac.parent)
-        self.assertEqual(parent_ac, node_ac.parent_entry)
-        self.assertEqual(tree, node_ac.tree)
+        self.assertEqual(3, len(tree.root.entries))
+        self.assertEqual(Rect(0, 0, 7, 8), tree.root.get_bounding_rect())
+        # Find entry at root level that contains child entries [a, c, e] and test its properties
+        root_entry_ace = next((e for e in tree.root.entries if e.rect == Rect(0, 0, 7, 5)))
+        self.assertIsNone(root_entry_ace.data)
+        self.assertFalse(root_entry_ace.is_leaf)
+        self.assertIsNotNone(root_entry_ace.child)
+        # Test properties of node that contains entries [a, c, e]
+        node_ace = root_entry_ace.child
+        self.assertEqual(Rect(0, 0, 7, 5), node_ace.get_bounding_rect())
+        self.assertFalse(node_ace.is_root)
+        self.assertTrue(node_ace.is_leaf)
+        self.assertEqual(3, len(node_ace.entries))
+        self.assertEqual(tree.root, node_ace.parent)
+        self.assertEqual(root_entry_ace, node_ace.parent_entry)
+        self.assertEqual(tree, node_ace.tree)
         # Entry 'a'
-        entry_a = next((e for e in node_ac.entries if e.data == 'a'))
-        self.assertEqual(Rect(0, 0, 5, 2), entry_a.rect)
+        entry_a = next((e for e in node_ace.entries if e.data == 'a'))
+        self.assertEqual(Rect(0, 2, 6, 3), entry_a.rect)
         self.assertTrue(entry_a.is_leaf)
         self.assertIsNone(entry_a.child)
         # Entry 'c'
-        entry_c = next((e for e in node_ac.entries if e.data == 'c'))
-        self.assertEqual(Rect(3, 1, 7, 4), entry_c.rect)
+        entry_c = next((e for e in node_ace.entries if e.data == 'c'))
+        self.assertEqual(Rect(2, 4, 7, 5), entry_c.rect)
         self.assertTrue(entry_c.is_leaf)
         self.assertIsNone(entry_c.child)
+        # Entry 'c'
+        entry_e = next((e for e in node_ace.entries if e.data == 'e'))
+        self.assertEqual(Rect(1, 0, 3, 5), entry_e.rect)
+        self.assertTrue(entry_e.is_leaf)
+        self.assertIsNone(entry_e.child)
         # Find parent entry at root level that contains child entry 'b' and test its properties
-        parent_b = next((e for e in tree.root.entries if e.rect == Rect(2, 3, 4, 7)))
-        self.assertIsNone(parent_b.data)
-        self.assertFalse(parent_b.is_leaf)
-        self.assertIsNotNone(parent_b.child)
+        root_entry_b = next((e for e in tree.root.entries if e.rect == Rect(4, 1, 5, 5)))
+        self.assertIsNone(root_entry_b.data)
+        self.assertFalse(root_entry_b.is_leaf)
+        self.assertIsNotNone(root_entry_b.child)
         # Test properties of node that contains entry 'b'
-        node_b = parent_b.child
-        self.assertEqual(Rect(2, 3, 4, 7), node_b.get_bounding_rect())
+        node_b = root_entry_b.child
+        self.assertEqual(Rect(4, 1, 5, 5), node_b.get_bounding_rect())
         self.assertFalse(node_b.is_root)
         self.assertTrue(node_b.is_leaf)
         self.assertEqual(1, len(node_b.entries))
         self.assertEqual(tree.root, node_b.parent)
-        self.assertEqual(parent_b, node_b.parent_entry)
+        self.assertEqual(root_entry_b, node_b.parent_entry)
         self.assertEqual(tree, node_b.tree)
         # Entry 'b'
         entry_b = node_b.entries[0]
-        self.assertEqual(Rect(2, 3, 4, 7), entry_b.rect)
+        self.assertEqual('b', entry_b.data)
+        self.assertEqual(Rect(4, 1, 5, 5), entry_b.rect)
         self.assertTrue(entry_b.is_leaf)
         self.assertIsNone(entry_b.child)
+        # Find parent entry at root level that contains child entry 'd' and test its properties
+        root_entry_d = next((e for e in tree.root.entries if e.rect == Rect(2, 3, 4, 8)))
+        self.assertIsNone(root_entry_d.data)
+        self.assertFalse(root_entry_d.is_leaf)
+        self.assertIsNotNone(root_entry_d.child)
+        # Test properties of node that contains entry 'd'
+        node_d = root_entry_d.child
+        self.assertEqual(Rect(2, 3, 4, 8), node_d.get_bounding_rect())
+        self.assertFalse(node_d.is_root)
+        self.assertTrue(node_d.is_leaf)
+        self.assertEqual(1, len(node_d.entries))
+        self.assertEqual(tree.root, node_d.parent)
+        self.assertEqual(root_entry_d, node_d.parent_entry)
+        self.assertEqual(tree, node_d.tree)
+        # Entry 'd'
+        entry_d = node_d.entries[0]
+        self.assertEqual('d', entry_d.data)
+        self.assertEqual(Rect(2, 3, 4, 8), entry_d.rect)
+        self.assertTrue(entry_d.is_leaf)
+        self.assertIsNone(entry_d.child)
         # Ensure there are two levels total in the tree and the levels contain the correct data
         levels = tree.get_levels()
         self.assertEqual(2, len(levels))
@@ -492,14 +514,14 @@ class TestRStar(TestCase):
         self.assertEqual(tree.root, level_0[0])
         # Assert nodes at level below the root
         level_1 = levels[1]
-        self.assertEqual(2, len(level_1))
-        self.assertCountEqual([node_ac, node_b], level_1)
+        self.assertEqual(3, len(level_1))
+        self.assertCountEqual([node_ace, node_b, node_d], level_1)
         # Assert full list of nodes
-        self.assertCountEqual([tree.root, node_ac, node_b], tree.get_nodes())
+        self.assertCountEqual([tree.root, node_ace, node_b, node_d], tree.get_nodes())
         # Assert leaf nodes
-        self.assertCountEqual([node_ac, node_b], tree.get_leaves())
+        self.assertCountEqual([node_ace, node_b, node_d], tree.get_leaves())
         # Assert leaf entries
-        self.assertCountEqual([entry_a, entry_b, entry_c], tree.get_leaf_entries())
+        self.assertCountEqual([entry_a, entry_b, entry_c, entry_d, entry_e], tree.get_leaf_entries())
 
     @patch('rtreelib.strategies.rstar.rstar_split')
     def test_rstar_overflow_reinsert_without_split(self, rstar_split_mock):
