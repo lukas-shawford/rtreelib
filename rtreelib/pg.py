@@ -134,7 +134,7 @@ def export_to_postgis(rtree: RTreeBase, conn=None, schema: str = 'public', srid:
         node_ids = {}
         entry_ids = {}
         with conn.cursor(cursor_factory=DictCursor) as cursor:
-            rtree_id = _insert_rtree(cursor, schema)
+            rtree_id = _insert_rtree(cursor, schema, rtree)
             for level, nodes in enumerate(rtree.get_levels()):
                 for node in nodes:
                     node_id = _insert_rtree_node(cursor, schema, node, rtree_id, level, srid, node_ids, entry_ids)
@@ -187,9 +187,11 @@ def _get_datatype(datatype: Union[Type, str] = None) -> str:
     return 'TEXT'
 
 
-def _insert_rtree(cursor, schema) -> int:
+def _insert_rtree(cursor, schema, tree: RTreeBase) -> int:
     sql = _get_sql_from_template('insert_rtree', schema=schema)
-    cursor.execute(sql)
+    cursor.execute(sql, {
+        "obj_id": id(tree)
+    })
     return cursor.fetchone()['id']
 
 
@@ -198,6 +200,7 @@ def _insert_rtree_node(cursor, schema: str, node: RTreeNode, rtree_id: int, leve
     rect = node.get_bounding_rect()
     sql = _get_sql_from_template('insert_rtree_node', schema=schema)
     cursor.execute(sql, {
+        "obj_id": id(node),
         "rtree_id": rtree_id,
         "level": level,
         "min_x": rect.min_x,
@@ -217,6 +220,7 @@ def _insert_rtree_entry(cursor, schema: str, entry: RTreeEntry, node_id: int, sr
                         entry_ids: Dict[RTreeEntry, int]) -> int:
     sql = _get_sql_from_template('insert_rtree_entry', schema=schema)
     cursor.execute(sql, {
+        "obj_id": id(entry),
         "parent_node_id": node_id,
         "min_x": entry.rect.min_x,
         "min_y": entry.rect.min_y,

@@ -1,11 +1,13 @@
 CREATE TABLE ${schema}.rtree
 (
-  id SERIAL PRIMARY KEY
+  id SERIAL PRIMARY KEY,
+  obj_id BIGINT
 );
 
 CREATE TABLE ${schema}.rtree_node
 (
   id SERIAL PRIMARY KEY,
+  obj_id BIGINT,
   rtree_id INT REFERENCES ${schema}.rtree (id) NOT NULL,
   level INT NOT NULL,
   bbox GEOMETRY(Polygon, ${srid}),
@@ -20,6 +22,7 @@ CREATE INDEX rtree_node_bbox_idx
 CREATE TABLE ${schema}.rtree_entry
 (
   id SERIAL PRIMARY KEY,
+  obj_id BIGINT,
   parent_node_id INT REFERENCES ${schema}.rtree_node (id) NOT NULL,
   bbox GEOMETRY(Polygon, ${srid}) NOT NULL,
   leaf BOOLEAN NOT NULL,

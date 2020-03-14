@@ -1,1 +1,1 @@
-INSERT INTO ${schema}.rtree DEFAULT VALUES RETURNING id;
+INSERT INTO ${schema}.rtree (obj_id) VALUES (%(obj_id)s) RETURNING id;
