@@ -18,29 +18,36 @@ except ImportError:
     raise RuntimeError("The following libraries are required to create R-Tree diagrams: matplotlib, pydot, tqdm")
 
 
-def create_rtree_diagram(tree: RTreeBase, title=None, filename_png=None, filename_dot=None, include_images=True):
+def create_rtree_diagram(tree: RTreeBase, label=None, fmt="png", filename=None, filename_dot=None,
+                         include_images=True, open_diagram=True, **kwargs):
     """
     Creates an R-Tree diagram for visualizing the tree structure using graphviz. Note that the diagram may be large and
     take a while to generate, especially if include_images is set to True.
     :param tree: R-Tree to draw
-    :param title: Optional title
-    :param filename_png: Optional filename for the generated diagram. If not provided, a temporary filename will be
+    :param label: Optional title
+    :param fmt: Output format of the diagram. Supported formats include "png" (PNG image) and "ps" (PostScript).
+        Defaults to "png".
+    :param filename: Optional filename for the generated diagram. If not provided, a temporary filename will be
         generated.
     :param filename_dot: Optional filename for the 'dot' graphviz file that will be used as an intermediate file for
         creating the diagram. If not provided, a temporary filename will be generated.
-    :param include_images: If true, each node and entry in the diagram will contain an embedded plot that helps
+    :param include_images: If True, each node and entry in the diagram will contain an embedded plot that helps
         visualize where the node/entry is located in relation to the other nodes/entries. Note this may slow down
         diagram generation significantly.
+    :param open_diagram: If True, the default viewer will be launched after the diagram is generated. Defaults to True.
     """
-    graph = pydot.Dot(graph_type='digraph', label=title, labelloc='t')
+    kwargs.setdefault('label', label)
+    kwargs.setdefault('labelloc', 't')
+    graph = pydot.Dot(graph_type='digraph', **kwargs)
     graph.set_node_defaults(shape='plaintext')
     _draw_rtree_nodes(graph, tree, include_images)
     _draw_rtree_edges(graph, tree.root)
-    filename_png = filename_png or tempfile.mkstemp('.png')[1]
-    graph.write(filename_png, format='png')
+    filename = filename or tempfile.mkstemp('.' + fmt)[1]
+    graph.write(filename, format=fmt)
     filename_dot = filename_dot or tempfile.mkstemp('.dot')[1]
     graph.write(filename_dot)
-    _invoke_file(filename_png)
+    if open_diagram:
+        _invoke_file(filename)
 
 
 def plot_rtree(tree: RTreeBase, filename=None, show=True, highlight_node=None, highlight_entry=None):
