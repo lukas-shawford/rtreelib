@@ -190,7 +190,8 @@ def _get_datatype(datatype: Union[Type, str] = None) -> str:
 def _insert_rtree(cursor, schema, tree: RTreeBase) -> int:
     sql = _get_sql_from_template('insert_rtree', schema=schema)
     cursor.execute(sql, {
-        "obj_id": id(tree)
+        "obj_id": id(tree),
+        "hex_id": hex(id(tree))
     })
     return cursor.fetchone()['id']
 
@@ -201,6 +202,7 @@ def _insert_rtree_node(cursor, schema: str, node: RTreeNode, rtree_id: int, leve
     sql = _get_sql_from_template('insert_rtree_node', schema=schema)
     cursor.execute(sql, {
         "obj_id": id(node),
+        "hex_id": hex(id(node)),
         "rtree_id": rtree_id,
         "level": level,
         "min_x": rect.min_x,
@@ -221,6 +223,7 @@ def _insert_rtree_entry(cursor, schema: str, entry: RTreeEntry, node_id: int, sr
     sql = _get_sql_from_template('insert_rtree_entry', schema=schema)
     cursor.execute(sql, {
         "obj_id": id(entry),
+        "hex_id": hex(id(entry)),
         "parent_node_id": node_id,
         "min_x": entry.rect.min_x,
         "min_y": entry.rect.min_y,

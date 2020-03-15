@@ -1,13 +1,15 @@
 CREATE TABLE ${schema}.rtree
 (
   id SERIAL PRIMARY KEY,
-  obj_id BIGINT
+  obj_id BIGINT,
+  hex_id VARCHAR(32)
 );
 
 CREATE TABLE ${schema}.rtree_node
 (
   id SERIAL PRIMARY KEY,
   obj_id BIGINT,
+  hex_id VARCHAR(32),
   rtree_id INT REFERENCES ${schema}.rtree (id) NOT NULL,
   level INT NOT NULL,
   bbox GEOMETRY(Polygon, ${srid}),
@@ -23,6 +25,7 @@ CREATE TABLE ${schema}.rtree_entry
 (
   id SERIAL PRIMARY KEY,
   obj_id BIGINT,
+  hex_id VARCHAR(32),
   parent_node_id INT REFERENCES ${schema}.rtree_node (id) NOT NULL,
   bbox GEOMETRY(Polygon, ${srid}) NOT NULL,
   leaf BOOLEAN NOT NULL,
