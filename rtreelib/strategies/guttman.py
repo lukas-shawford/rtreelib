@@ -131,5 +131,11 @@ class RTreeGuttman(RTreeBase[T]):
         :param max_entries: Maximum number of entries per node.
         :param min_entries: Minimum number of entries per node. Defaults to ceil(max_entries/2).
         """
-        super().__init__(insert=insert, choose_leaf=guttman_choose_leaf, adjust_tree=adjust_tree_strategy,
-                         overflow_strategy=quadratic_split, max_entries=max_entries, min_entries=min_entries)
+        super().__init__(
+            max_entries=max_entries,
+            min_entries=min_entries,
+            insert=insert,
+            choose_leaf=guttman_choose_leaf,
+            adjust_tree=adjust_tree_strategy,
+            overflow_strategy=quadratic_split
+        )

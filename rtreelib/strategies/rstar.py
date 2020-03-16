@@ -328,5 +328,11 @@ class RStarTree(RTreeBase[T]):
         :param max_entries: Maximum number of entries per node.
         :param min_entries: Minimum number of entries per node. Defaults to ceil(max_entries/2).
         """
-        super().__init__(insert=rstar_insert, choose_leaf=rstar_choose_leaf, adjust_tree=rstar_adjust_tree,
-                         overflow_strategy=rstar_overflow, max_entries=max_entries, min_entries=min_entries)
+        super().__init__(
+            max_entries=max_entries,
+            min_entries=min_entries,
+            insert=rstar_insert,
+            choose_leaf=rstar_choose_leaf,
+            adjust_tree=rstar_adjust_tree,
+            overflow_strategy=rstar_overflow
+        )
