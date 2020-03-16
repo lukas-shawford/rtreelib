@@ -533,7 +533,7 @@ class TestRStar(TestCase):
         t = RStarTree(max_entries=3)
         r1 = Rect(0, 0, 1, 1)
         r2 = Rect(9, 0, 10, 1)
-        r3 = Rect(0, 5, 1, 6)
+        r3 = Rect(0, 1, 1, 2)
         r4 = Rect(9, 5, 10, 6)
         r5 = Rect(3, 2, 10, 4)
         t.root = RTreeNode(t, is_leaf=False)
@@ -544,7 +544,7 @@ class TestRStar(TestCase):
         entry_e = RTreeEntry(r5, data='e')
         n1 = RTreeNode(t, is_leaf=True, parent=t.root, entries=[entry_a, entry_c])
         n2 = RTreeNode(t, is_leaf=True, parent=t.root, entries=[entry_b, entry_d, entry_e])
-        e1 = RTreeEntry(Rect(0, 0, 1, 6), child=n1)
+        e1 = RTreeEntry(Rect(0, 0, 1, 2), child=n1)
         e2 = RTreeEntry(Rect(3, 0, 10, 6), child=n2)
         t.root.entries = [e1, e2]
         # Arrange entry being inserted
@@ -554,7 +554,7 @@ class TestRStar(TestCase):
         n2.entries.append(entry_f)
         # Ensure preconditions:
         # At this point, the root node entries will still have their old covering rectangles.
-        self.assertEqual(Rect(0, 0, 1, 6), e1.rect)
+        self.assertEqual(Rect(0, 0, 1, 2), e1.rect)
         self.assertEqual(Rect(3, 0, 10, 6), e2.rect)
         # At this point, the root node will only have 2 entries for e1 and e2
         self.assertEqual([e1, e2], t.root.entries)
@@ -574,7 +574,7 @@ class TestRStar(TestCase):
         # Ensure node n1 now has entries [a, c, f].
         self.assertCountEqual([entry_a, entry_c, entry_f], n1.entries)
         # Ensure node n1 bounding box accommodates entries [a, c, f]
-        self.assertEqual(Rect(0, 0, 3, 6), n1.get_bounding_rect())
+        self.assertEqual(Rect(0, 0, 3, 2), n1.get_bounding_rect())
         # Remaining entries [b, d, e] should be in node n2.
         self.assertCountEqual([entry_b, entry_d, entry_e], n2.entries)
         self.assertEqual(Rect(3, 0, 10, 6), n2.get_bounding_rect())
@@ -592,11 +592,11 @@ class TestRStar(TestCase):
         # Arrange
         t = RStarTree(max_entries=3)
         r1 = Rect(0, 0, 1, 1)
-        r2 = Rect(0, 2, 1, 3)
+        r2 = Rect(0, 1, 1, 2)
         r3 = Rect(9, 0, 10, 1)
-        r4 = Rect(0, 5, 1, 6)
-        r5 = Rect(9, 5, 10, 6)
-        r6 = Rect(3, 2, 10, 4)
+        r4 = Rect(0, 2, 1, 3)
+        r5 = Rect(9, 6, 10, 7)
+        r6 = Rect(3, 2, 10, 5)
         t.root = RTreeNode(t, is_leaf=False)
         entry_a = RTreeEntry(r1, data='a')
         entry_b = RTreeEntry(r2, data='b')
@@ -606,8 +606,8 @@ class TestRStar(TestCase):
         entry_f = RTreeEntry(r6, data='f')
         n1 = RTreeNode(t, is_leaf=True, parent=t.root, entries=[entry_a, entry_b, entry_d])
         n2 = RTreeNode(t, is_leaf=True, parent=t.root, entries=[entry_c, entry_e, entry_f])
-        e1 = RTreeEntry(Rect(0, 0, 1, 6), child=n1)
-        e2 = RTreeEntry(Rect(3, 0, 10, 6), child=n2)
+        e1 = RTreeEntry(Rect(0, 0, 1, 3), child=n1)
+        e2 = RTreeEntry(Rect(3, 0, 10, 7), child=n2)
         t.root.entries = [e1, e2]
         # Arrange entry being inserted
         r7 = Rect(2, 1, 3, 2)
@@ -616,8 +616,8 @@ class TestRStar(TestCase):
         n2.entries.append(entry_g)
         # Ensure preconditions:
         # At this point, the root node entries will still have their old covering rectangles.
-        self.assertEqual(Rect(0, 0, 1, 6), e1.rect)
-        self.assertEqual(Rect(3, 0, 10, 6), e2.rect)
+        self.assertEqual(Rect(0, 0, 1, 3), e1.rect)
+        self.assertEqual(Rect(3, 0, 10, 7), e2.rect)
         # At this point, the root node will only have 2 entries for e1 and e2
         self.assertEqual([e1, e2], t.root.entries)
 
@@ -633,18 +633,18 @@ class TestRStar(TestCase):
         # There should be 3 nodes at the leaf level
         leaf_nodes = levels[1]
         self.assertEqual(3, len(leaf_nodes))
-        # One of the nodes should have entries [a, b, g] and with the correct bounding rectangle
-        n1 = next((n for n in leaf_nodes if set(_get_leaf_node_data(n)) == {'a', 'b', 'g'}))
-        self.assertEqual(Rect(0, 0, 3, 3), n1.get_bounding_rect())
-        self.assertEqual(Rect(0, 0, 3, 3), n1.parent_entry.rect)
-        # Another node should have entries [c, e] and with the correct bounding rectangle
-        n2 = next((n for n in leaf_nodes if set(_get_leaf_node_data(n)) == {'c', 'e'}))
-        self.assertEqual(Rect(9, 0, 10, 6), n2.get_bounding_rect())
-        self.assertEqual(Rect(9, 0, 10, 6), n2.parent_entry.rect)
-        # Last node should have entries [d, f] and with the correct bounding rectangle
-        n3 = next((n for n in leaf_nodes if set(_get_leaf_node_data(n)) == {'d', 'f'}))
-        self.assertEqual(Rect(0, 2, 10, 6), n3.get_bounding_rect())
-        self.assertEqual(Rect(0, 2, 10, 6), n3.parent_entry.rect)
+        # One of the nodes should have entries [a, b] and with the correct bounding rectangle
+        n1 = next((n for n in leaf_nodes if set(_get_leaf_node_data(n)) == {'a', 'b'}))
+        self.assertEqual(Rect(0, 0, 1, 2), n1.get_bounding_rect())
+        self.assertEqual(Rect(0, 0, 1, 2), n1.parent_entry.rect)
+        # Another node should have entries [c, e, f] and with the correct bounding rectangle
+        n2 = next((n for n in leaf_nodes if set(_get_leaf_node_data(n)) == {'c', 'e', 'f'}))
+        self.assertEqual(Rect(3, 0, 10, 7), n2.get_bounding_rect())
+        self.assertEqual(Rect(3, 0, 10, 7), n2.parent_entry.rect)
+        # Last node should have entries [d, g] and with the correct bounding rectangle
+        n3 = next((n for n in leaf_nodes if set(_get_leaf_node_data(n)) == {'d', 'g'}))
+        self.assertEqual(Rect(0, 1, 3, 3), n3.get_bounding_rect())
+        self.assertEqual(Rect(0, 1, 3, 3), n3.parent_entry.rect)
 
     def test_rstar_overflow_split_root(self):
         """
@@ -681,7 +681,7 @@ class TestRStar(TestCase):
         self.assertEqual(Rect(0, 0, 5, 3), e1.rect)
         # e2 bounding box should encompass entries [b ,d]
         self.assertEqual(Rect(6, 6, 10, 9), e2.rect)
-        # Ensure children nodes of e1 and e2 and leaf nodes
+        # Ensure children nodes of e1 and e2 are leaf nodes
         leaf_node_1 = e1.child
         leaf_node_2 = e2.child
         self.assertIsNotNone(leaf_node_1)
@@ -694,6 +694,119 @@ class TestRStar(TestCase):
         # Leaf node 2 should contain entries [b, d]
         self.assertEqual(Rect(6, 6, 10, 9), leaf_node_2.get_bounding_rect())
         self.assertCountEqual([entry_b, entry_d], leaf_node_2.entries)
+
+    def test_rstar_overflow_reinsert_grow_tree(self):
+        """
+        When a forced reinsert causes a node split which propagates upward causing the tree to grow, ensure that the
+        remaining entries that still need to be re-inserted are inserted at the correct level. The number of levels in
+        the tree changes in the middle of an insert operation under this scenario, which makes this rather complex.
+        This scenario is also the reason why the R* insert tracks the level as the number of levels from the leaf (i.e.,
+        the leaf level is 0), instead of the more traditional approach of referring to the root level as 0.
+        """
+        # Arrange
+        # Create a tree with 2 levels, with the root and all leaf nodes at capacity.
+        # Arrange
+        t = RStarTree(max_entries=3, min_entries=1)
+        r1 = Rect(0, 0, 5, 2)
+        r2 = Rect(1, 1, 5, 3)
+        r3 = Rect(2, 2, 6, 4)
+        r4 = Rect(5, 0, 12, 9)
+        r5 = Rect(7, 7, 20, 8)
+        r6 = Rect(4, 4, 13, 6)
+        r7 = Rect(16, 7, 19, 10)
+        r8 = Rect(16, 9, 18, 10)
+        r9 = Rect(18, 8, 19, 10)
+        t.root = RTreeNode(t, is_leaf=False)
+        entry_a = RTreeEntry(r1, data='a')
+        entry_b = RTreeEntry(r2, data='b')
+        entry_c = RTreeEntry(r3, data='c')
+        entry_d = RTreeEntry(r4, data='d')
+        entry_e = RTreeEntry(r5, data='e')
+        entry_f = RTreeEntry(r6, data='f')
+        entry_g = RTreeEntry(r7, data='g')
+        entry_h = RTreeEntry(r8, data='h')
+        entry_i = RTreeEntry(r9, data='i')
+        n1 = RTreeNode(t, is_leaf=True, parent=t.root, entries=[entry_a, entry_b, entry_c])
+        n2 = RTreeNode(t, is_leaf=True, parent=t.root, entries=[entry_d, entry_e, entry_f])
+        n3 = RTreeNode(t, is_leaf=True, parent=t.root, entries=[entry_g, entry_h, entry_i])
+        e1 = RTreeEntry(Rect(0, 0, 6, 4), child=n1)
+        e2 = RTreeEntry(Rect(4, 0, 20, 9), child=n2)
+        e3 = RTreeEntry(Rect(16, 7, 19, 10), child=n3)
+        t.root.entries = [e1, e2, e3]
+        # Arrange entry being inserted
+        r10 = Rect(18, 5, 20, 7)
+        entry_j = RTreeEntry(r10, data='j')
+        # Manually insert the new entry into node n2, causing it to be overfull.
+        n2.entries.append(entry_j)
+        # Ensure preconditions
+        # At this point, the tree should have 2 levels
+        self.assertEqual(2, len(t.get_levels()))
+
+        # Act
+        rstar_overflow(t, n2)
+
+        # Assert
+        # Tree should now have 3 levels
+        self.assertEqual(3, len(t.get_levels()))
+        # Root node bounding box should encompass all entries
+        self.assertEqual(Rect(0, 0, 20, 10), t.root.get_bounding_rect())
+        # Root node should have 2 child entries
+        self.assertEqual(2, len(t.root.entries))
+        # Ensure entries in the root node have the expected bounding boxes
+        root_entry_1 = next((e for e in t.root.entries if e.rect == Rect(0, 0, 12, 9)))
+        root_entry_2 = next((e for e in t.root.entries if e.rect == Rect(4, 4, 20, 10)))
+        # Ensure children nodes of root_entry_1 and root_entry_2 are intermediate nodes
+        intermediate_node_1 = root_entry_1.child
+        intermediate_node_2 = root_entry_2.child
+        self.assertFalse(intermediate_node_1.is_leaf)
+        self.assertFalse(intermediate_node_1.is_root)
+        self.assertFalse(intermediate_node_2.is_leaf)
+        self.assertFalse(intermediate_node_2.is_root)
+        # Ensure intermediate nodes have correct bounding boxes
+        self.assertEqual(Rect(0, 0, 12, 9), intermediate_node_1.get_bounding_rect())
+        self.assertEqual(Rect(4, 4, 20, 10), intermediate_node_2.get_bounding_rect())
+        # Ensure intermediate nodes have the correct number of child entries
+        self.assertEqual(2, len(intermediate_node_1.entries))
+        self.assertEqual(3, len(intermediate_node_2.entries))
+        # Ensure entries in the intermediate nodes have correct bounding boxes
+        intermediate_entry_1 = next(e for e in intermediate_node_1.entries if e.rect == Rect(0, 0, 6, 4))
+        intermediate_entry_2 = next(e for e in intermediate_node_1.entries if e.rect == Rect(5, 0, 12, 9))
+        intermediate_entry_3 = next(e for e in intermediate_node_2.entries if e.rect == Rect(16, 9, 18, 10))
+        intermediate_entry_4 = next(e for e in intermediate_node_2.entries if e.rect == Rect(7, 7, 20, 10))
+        intermediate_entry_5 = next(e for e in intermediate_node_2.entries if e.rect == Rect(4, 4, 20, 7))
+        # Get leaf child nodes
+        leaf_node_1 = intermediate_entry_1.child
+        leaf_node_2 = intermediate_entry_2.child
+        leaf_node_3 = intermediate_entry_3.child
+        leaf_node_4 = intermediate_entry_4.child
+        leaf_node_5 = intermediate_entry_5.child
+        # Ensure leaf nodes are properly marked as leaf nodes
+        self.assertTrue(leaf_node_1.is_leaf)
+        self.assertTrue(leaf_node_2.is_leaf)
+        self.assertTrue(leaf_node_3.is_leaf)
+        self.assertTrue(leaf_node_4.is_leaf)
+        self.assertTrue(leaf_node_5.is_leaf)
+        # Leaf nodes should not be inadvertently marked as root
+        self.assertFalse(leaf_node_1.is_root)
+        self.assertFalse(leaf_node_2.is_root)
+        self.assertFalse(leaf_node_3.is_root)
+        self.assertFalse(leaf_node_4.is_root)
+        self.assertFalse(leaf_node_5.is_root)
+        # Leaf node 1 should have entries [a, b, c]
+        self.assertEqual(Rect(0, 0, 6, 4), leaf_node_1.get_bounding_rect())
+        self.assertCountEqual([entry_a, entry_b, entry_c], leaf_node_1.entries)
+        # Leaf node 2 should have entry [d]
+        self.assertEqual(Rect(5, 0, 12, 9), leaf_node_2.get_bounding_rect())
+        self.assertCountEqual([entry_d], leaf_node_2.entries)
+        # Leaf node 3 should have entry [h]
+        self.assertEqual(Rect(16, 9, 18, 10), leaf_node_3.get_bounding_rect())
+        self.assertCountEqual([entry_h], leaf_node_3.entries)
+        # Leaf node 4 should have entries [e, g, i]
+        self.assertEqual(Rect(7, 7, 20, 10), leaf_node_4.get_bounding_rect())
+        self.assertCountEqual([entry_e, entry_g, entry_i], leaf_node_4.entries)
+        # Leaf node 5 should have entries [f, j]
+        self.assertEqual(Rect(4, 4, 20, 7), leaf_node_5.get_bounding_rect())
+        self.assertCountEqual([entry_f, entry_j], leaf_node_5.entries)
 
 
 def _get_leaf_node_data(node: RTreeNode[T]) -> List[T]:

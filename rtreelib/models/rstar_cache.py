@@ -13,6 +13,9 @@ class RStarCache:
         # at a given level requires us to do a level-traversal of the entire tree anyway, and having the list of nodes
         # at higher levels may be necessary if propagation of node splits causes further reinserts at higher levels in
         # the tree.
+        # TODO: Candidate for optimization (consider adding this cache to RTreeBase and keeping it updated during
+        #  inserts/deletes/updates, instead of having to do a full tree traversal to construct it from scratch whenever
+        #  we have an overflow).
         self.levels: Optional[List[List[RTreeNode[T]]]] = None
         # Dictionary to keep track of which levels of the tree a forced reinsert has occurred already. During a forced
         # reinsert, a subset of the entries from an overflowing node may get inserted into a different node at the same
