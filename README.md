@@ -461,6 +461,61 @@ spatial partitioning scheme should aim to minimize this overlap, since a query t
 find the leaf entry for a given point would require visiting multiple subtrees if
 that point happens to land in one of these darker shaded areas of overlap.
 
+You can also write a query to analyze the amount of overlap that resulted in each
+level of the tree. For example, the query below returns the total amount of overlap
+area of all nodes at level 2 of an exported R-tree having ID 1:
+
+```postgresql
+SELECT ST_Area(ST_Union(ST_Intersection(n1.bbox, n2.bbox))) AS OverlapArea
+FROM temp.rtree t
+  INNER JOIN temp.rtree_node n1 ON n1.rtree_id = t.id
+  INNER JOIN temp.rtree_node n2 ON n2.rtree_id = t.id AND n1.level = n2.level
+WHERE
+  t.id = 1
+  AND n1.level = 2
+  AND ST_Overlaps(n1.bbox, n2.bbox)
+  AND n1.id <> n2.id;
+```
+
+Extending this even further, you can compare the total overlap area of multiple exported
+R-trees by level:
+
+```postgresql
+SELECT
+  CASE t.id
+    WHEN 1 THEN 'Guttman'
+    WHEN 2 THEN 'R*'
+  END AS tree,
+  n.level,
+  ST_Area(ST_Union(ST_Intersection(n.bbox, n2.bbox))) AS OverlapArea
+FROM temp.rtree t
+  INNER JOIN temp.rtree_node n ON n.rtree_id = t.id
+  INNER JOIN temp.rtree_node n2 ON n2.rtree_id = t.id AND n.level = n2.level
+WHERE
+  ST_Overlaps(n.bbox, n2.bbox)
+  AND n.id <> n2.id
+GROUP BY
+  t.id,
+  n.level
+ORDER BY
+  t.id,
+  n.level;
+```
+
+The above query may return a result like the following:
+
+tree    | level | OverlapArea |
+--------|-------|-------------|
+Guttman | 1     | 7.89e+11    |
+Guttman | 2     | 9.12e+11    |
+Guttman | 3     | 4.75e+11    |
+R*      | 1     | 3.97e+11    |
+R*      | 2     | 4.35e+11    |
+R*      | 3     | 1.80e+11    |
+
+In the above example, the R*-Tree (`id`=2) achieved a smaller overlap area at
+every level of the tree compared to Guttman (`id`=1).
+
 ### Cleaning Up
 
 As mentioned above, when you call `export_to_postgis`, the existing data in the
