@@ -24,16 +24,21 @@ be examined using a GIS viewer like QGIS.
 
 ## Status
 
-This library is currently in early development. At this time, only the original Guttman
-strategy is implemented (insertion only, no deletion), though the framework for swapping
-out the strategies is in place. Note that as additional strategies are implemented, it is
-anticipated that this framework will need to be extended, resulting in breaking changes.
+This library is currently in early development. The table below shows which R-tree variants
+have been implemented, along with which operations they currently support:
 
-Contributions for implementing additional strategies are welcome. See the section on
-**Extending** below.
+| R-Tree Variant        | Insert                | Update                | Delete                |
+|-----------------------|-----------------------|-----------------------|-----------------------|
+| **Guttman** [2]       | :heavy_check_mark:    | :black_square_button: | :black_square_button: |
+| **R\*-Tree** [3]      | :heavy_check_mark:    | :black_square_button: | :black_square_button: |
 
-There is existing functionality for creating diagrams (explained below), and the ability to
-export the R-Tree structure to PostGIS is also in the works.
+The library has a framework in place for swapping out the various strategies, making it
+possible to add a new R-tree variant. However, given that this library is still early in
+development, it is anticipated that this framework may need to be extended, resulting in
+breaking changes.
+
+Contributions for implementing additional strategies and operations are welcome. See
+the section on **Extending** below.
 
 ## Setup
 
@@ -51,13 +56,17 @@ below for additional setup information.
 
 ## Usage
 
-To instantiate the default implementation and insert an entry:
+To instantiate the default implementation and insert some entries:
 
 ```python
 from rtreelib import RTree, Rect
 
 t = RTree()
-t.insert('foo', Rect(0, 0, 5, 5))
+t.insert('a', Rect(0, 0, 3, 3))
+t.insert('b', Rect(2, 2, 4, 4))
+t.insert('c', Rect(1, 1, 2, 4))
+t.insert('d', Rect(8, 8, 10, 10))
+t.insert('e', Rect(7, 7, 9, 9))
 ```
 
 The first parameter to the `insert` method represents the data, and can be of any data type
@@ -66,10 +75,24 @@ easily and succintly represented as a string if you want to create diagrams). Th
 parameter represents the minimum bounding rectangle (MBR) of the associated data element.
 
 The default implementation uses Guttman's original strategies for insertion, node splitting,
-and deletion, as outlined in his paper from 1984 [2]. However, the behavior can be customized
-by either instantiating or inheriting from `RTreeBase` and providing your own implementations
-for these behaviors. (Eventually this library will also ship with several ready-made
-implementations.) See the following section for more information.
+and deletion, as outlined in his paper from 1984 [2].
+
+To use the R* implementation instead:
+
+```python
+from rtreelib import RStarTree, Rect
+
+t = RStarTree()
+t.insert('a', Rect(0, 0, 3, 3))
+t.insert('b', Rect(2, 2, 4, 4))
+t.insert('c', Rect(1, 1, 2, 4))
+t.insert('d', Rect(8, 8, 10, 10))
+t.insert('e', Rect(7, 7, 9, 9))
+```
+
+You can also create a custom implementation by inheriting from `RTreeBase` and providing
+your own implementations for the various behaviors (insert, overflow, etc.). See the
+following section for more information.
 
 ## Extending
 
@@ -79,7 +102,7 @@ end, this library provides a framework for achieving this.
 
 As an example, the [`RTreeGuttman`](https://github.com/sergkr/rtreelib/blob/master/rtreelib/strategies/guttman.py)
 class (aliased as `RTree`) simply inherits from `RTreeBase`, providing an implementation
-for the `choose_leaf`, `adjust_tree`, and `split_node` behaviors as follows:
+for the `insert`, `choose_leaf`, `adjust_tree`, and `overflow_strategy` behaviors as follows:
 
 ```python
 class RTreeGuttman(RTreeBase[T]):
@@ -91,13 +114,27 @@ class RTreeGuttman(RTreeBase[T]):
         :param max_entries: Maximum number of entries per node.
         :param min_entries: Minimum number of entries per node. Defaults to ceil(max_entries/2).
         """
-        super().__init__(choose_leaf=least_enlargement, adjust_tree=adjust_tree_strategy, split_node=quadratic_split,
-                         max_entries=max_entries, min_entries=min_entries)
+        super().__init__(
+            max_entries=max_entries,
+            min_entries=min_entries,
+            insert=insert,
+            choose_leaf=guttman_choose_leaf,
+            adjust_tree=adjust_tree_strategy,
+            overflow_strategy=quadratic_split
+        )
 ```
 
 Each behavior should be a function that implements a specific signature and performs a given
 task. Here are the behaviors that are currently required to be specified:
 
+* **`insert`**: Strategy used for inserting a single new entry into the tree.
+  * Signature: `(tree: RTreeBase[T], data: T, rect: Rect) → RTreeEntry[T]`
+  * Arguments:
+    * `tree: RTreeBase[T]`: R-tree instance.
+    * `data: T`: Data stored in this entry.
+    * `rect: Rect`: Bounding rectangle.
+  * Returns: `RTreeEntry[T]`
+    * This function should return the newly inserted entry.
 * **`choose_leaf`**: Strategy used for choosing a leaf node when inserting a new entry.
   * Signature: `(tree: RTreeBase[T], entry: RTreeEntry[T]) → RTreeNode[T]`
   * Arguments:
@@ -106,8 +143,7 @@ task. Here are the behaviors that are currently required to be specified:
   * Returns: `RTreeNode[T]`
     * This function should return the leaf node where the new entry should be inserted. This
     node may or may not have the capacity for the new entry. If the insertion of the new node
-    results in the node overflowing, it will be split according to the strategy defined by
-    `split_node`.
+    results in the node overflowing, then `overflow_strategy` will be invoked on the node.
 * **`adjust_tree`**: Strategy used for balancing the tree, including propagating node splits,
 updating bounding boxes on all nodes and entries as necessary, and growing the tree by
 creating a new root if necessary. This strategy is executed after inserting or deleting an
@@ -119,17 +155,18 @@ entry.
     * `split_node: RTreeNode[T]`: If the insertion of a new entry has caused the node to
     split, this is the newly-created split node. Otherwise, this will be `None`.
   * Returns: `None`
-* **`split_node`**: Strategy used for splitting a node that contains more than the maximum
-number of entries. This function should break up the node's entries into two groups,
-assigning one of the groups to be the entries of the original node, and the other to a
-newly-created neighbor node (which this function should return).
+* **`overflow_strategy`**: Strategy used for handling an overflowing node (a node that
+contains more than `max_entries`). Depending on the implementation, this may involve
+splitting the node and potentially growing the tree (Guttman), performing a forced
+reinsert of entries (R*), or some other strategy.
   * Signature: `(tree: RTreeBase[T], node: RTreeNode[T]) → RTreeNode[T]`
   * Arguments:
     * `tree: RTreeBase[T]`: R-tree instance.
-    * `node: RTreeNode[T]`: Overflowing node that needs to be split.
+    * `node: RTreeNode[T]`: Overflowing node.
   * Returns: `RTreeNode[T]`
-    * This function should return the newly-created split node whose entries are a subset
-    of the original node's entries.
+    * Depending on the implementation, this function may return a newly-created split
+    node whose entries are a subset of the original node's entries (Guttman), or simply
+    return `None`.
 
 ## Creating R-tree Diagrams
 
@@ -160,7 +197,7 @@ Once the above dependencies are installed, you can create an R-tree diagram as f
 
 ```python
 from rtreelib import RTree, Rect
-from rtreelib.util.diagram import create_rtree_diagram
+from rtreelib.diagram import create_rtree_diagram
 
 
 # Create an RTree instance with some sample data
@@ -179,7 +216,7 @@ This creates a diagram like the following:
 
 ![R-tree Diagram](https://github.com/sergkr/rtreelib/blob/master/doc/rtree_diagram.png "R-tree Diagram")
 
-The diagram is created in a temp directory as a PostScript file, and the default viewer
+The diagram is created in a temp directory as a PNG file, and the default viewer
 is automatically launched for convenience. Each box in the main diagram represents a node
 (except at the leaf level, where it represents the leaf entry), and contains a plot that
 depicts all of the data spatially. The bounding boxes of each node are represented using
@@ -399,32 +436,30 @@ at a time:
 ![QGIS - Layers Panel](https://github.com/sergkr/rtreelib/blob/master/doc/qgis_layers_panel.png)
 
 The advantage with exporting the data to QGIS is you can also bring in your
-original dataset as a layer to see how it was partitioned spatially. Here, I am using
-a subset of the FAA airspace data for a portion of the Northeastern US (shown in
-red), and then toggling each level of the `rtree_node` layer individually so we
-can examine the resulting R-tree structure one level at a time.
+original dataset as a layer to see how it was partitioned spatially. Further,
+you can import multiple R-trees as separate layers and be able to compare them
+side by side.
 
-Level 0 (root node):
+Below, I am using a subset of the FAA airspace data for a portion of the
+Northeastern US, and then toggling each level of the `rtree_node` layer individually
+so we can examine the resulting R-tree structure one level at a time. After
+compositing these together, you can see how the Guttman R-Tree performs against
+R*.
 
-![QGIS - Root Level Nodes](https://github.com/sergkr/rtreelib/blob/master/doc/qgis_level_0.png)
+**Guttman**:
 
-Level 1:
+![Guttman R-Tree](https://github.com/sergkr/rtreelib/blob/rstar/doc/qgis_guttman.gif)
 
-![QGIS - Nodes at Level 1](https://github.com/sergkr/rtreelib/blob/master/doc/qgis_level_1.png)
+**R\*-Tree**:
 
-Level 2:
+![R*-Tree](https://github.com/sergkr/rtreelib/blob/rstar/doc/qgis_rstar.gif)
 
-![QGIS - Nodes at Level 2](https://github.com/sergkr/rtreelib/blob/master/doc/qgis_level_2.png)
-
-The partitioning looks coherent, though there is still quite a bit of overlap. This is
-made especially evident when using a partially transparent fill, as areas where multiple
-bounding rectangles intersect result in a darker fill. Ideally, the spatial partitioning
-scheme should aim to minimize this overlap, since a query to find the leaf entry for a
-given point would require visiting multiple subtrees if that point happens to land in one
-of these darker areas.
-
-Perhaps a different R-tree variant would work better on this dataset? This is the
-type of question that this library is meant to answer.
+It is evident that R* has resulted in more square-like bounding rectangles with
+less overlap at the intermediate levels, compared to Guttman. The areas of overlap
+are made especially evident when using a partially transparent fill. Ideally, the
+spatial partitioning scheme should aim to minimize this overlap, since a query to
+find the leaf entry for a given point would require visiting multiple subtrees if
+that point happens to land in one of these darker shaded areas of overlap.
 
 ### Cleaning Up
 
@@ -515,3 +550,7 @@ rtree_id = export_to_postgis(tree, schema='temp', user="postgres", password="tem
 ["R-trees: a Dynamic Index Structure for Spatial Searching"](http://www-db.deis.unibo.it/courses/SI-LS/papers/Gut84.pdf)
 (PDF), *Proceedings of the 1984 ACM SIGMOD international conference on Management of data – SIGMOD
 '84.* p. 47.
+
+[3]: Beckmann, Norbert, et al.
+["The R*-tree: an efficient and robust access method for points and rectangles."](https://infolab.usc.edu/csci599/Fall2001/paper/rstar-tree.pdf)
+*Proceedings of the 1990 ACM SIGMOD international conference on Management of data.* 1990.
