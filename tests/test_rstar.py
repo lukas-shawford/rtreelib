@@ -743,6 +743,35 @@ class TestRStar(TestCase):
         self.assertEqual(2, len(t.get_levels()))
 
         # Act
+        # Since this is a complicated case, here is a step-by-step breakdown of what we expect to happen:
+        # (1) Upon inserting entry j into node n2, it will overflow (now has 4 entries and max_entries is 3).
+        # (2) Forced reinsert will be performed on entries closest to n2's centroid, which are [e, d].
+        #     (a) First, entry e will get reinserted into n3, which currently contains entries [g, h, i].
+        #     (b) Since n3 now has 4 entries, it overflows.
+        #     (c) Since n3 is at the same level as n2, and we already did a forced reinsert at that level, a regular
+        #         split gets performed (instead of a forced reinsert).
+        #     (d) The split will be propagated upward to the root level.
+        #     (e) Since the root node is also at capacity, it will also overflow.
+        #     (f) Forced reinsert never occurs at the root level, so a split is performed on the root node.
+        #     (g) When the root node is split, the tree grows a level, and a new root node is created.
+        #     (h) Forced reinsert of entry e is now complete.
+        #     (i) Now, we still need to do the forced reinsert on entry d. Note that the tree structure has completely
+        #         changed in the intervening time since entry e got reinserted. The fact that the structure has changed
+        #         while we're still in the middle of reinserting entries is a source of much complexity, and the aim of
+        #         this test is to ensure that this scenario is properly handled. In particular:
+        #           - We must ensure that entry d gets inserted at the correct level of the tree. What was previously
+        #             level 1 (immediately below the root) is now actually level 2. (This is why the rstar
+        #             implementation keeps track of the level by counting from the leaf level, rather than from the
+        #             root, since levels from leaf does not change.)
+        #           - Since we must perform a forced reinsert at most once per level, if another forced reinsert causes
+        #             another node to overflow, we must ensure to do a split instead of another forced reinsert. Indeed
+        #             that is the case when reinserting entry d. Again, because the number of levels has changed, we
+        #             must be very careful of how we track what levels we have done a forced reinsert on (this
+        #             implementation counts from the leaf instead of from the root).
+        #     (j) Entry d gets reinserted into node n1, which currently contains entries [a, b, c].
+        #     (k) Since n1 now has 4 entries, it overflows.
+        #     (l) Since n1 is at the same level as n2, and we already did a forced reinsert at this level, a regular
+        #         split gets performed (instead of a forced reinsert).
         rstar_overflow(t, n2)
 
         # Assert
@@ -771,7 +800,7 @@ class TestRStar(TestCase):
         # Ensure entries in the intermediate nodes have correct bounding boxes
         intermediate_entry_1 = next(e for e in intermediate_node_1.entries if e.rect == Rect(0, 0, 6, 4))
         intermediate_entry_2 = next(e for e in intermediate_node_1.entries if e.rect == Rect(5, 0, 12, 9))
-        intermediate_entry_3 = next(e for e in intermediate_node_2.entries if e.rect == Rect(16, 9, 18, 10))
+        intermediate_entry_3 = next(e for e in intermediate_node_2.entries if e.rect == Rect(18, 8, 19, 10))
         intermediate_entry_4 = next(e for e in intermediate_node_2.entries if e.rect == Rect(7, 7, 20, 10))
         intermediate_entry_5 = next(e for e in intermediate_node_2.entries if e.rect == Rect(4, 4, 20, 7))
         # Get leaf child nodes
@@ -798,12 +827,12 @@ class TestRStar(TestCase):
         # Leaf node 2 should have entry [d]
         self.assertEqual(Rect(5, 0, 12, 9), leaf_node_2.get_bounding_rect())
         self.assertCountEqual([entry_d], leaf_node_2.entries)
-        # Leaf node 3 should have entry [h]
-        self.assertEqual(Rect(16, 9, 18, 10), leaf_node_3.get_bounding_rect())
-        self.assertCountEqual([entry_h], leaf_node_3.entries)
-        # Leaf node 4 should have entries [e, g, i]
+        # Leaf node 3 should have entry [i]
+        self.assertEqual(Rect(18, 8, 19, 10), leaf_node_3.get_bounding_rect())
+        self.assertCountEqual([entry_i], leaf_node_3.entries)
+        # Leaf node 4 should have entries [e, g, h]
         self.assertEqual(Rect(7, 7, 20, 10), leaf_node_4.get_bounding_rect())
-        self.assertCountEqual([entry_e, entry_g, entry_i], leaf_node_4.entries)
+        self.assertCountEqual([entry_e, entry_g, entry_h], leaf_node_4.entries)
         # Leaf node 5 should have entries [f, j]
         self.assertEqual(Rect(4, 4, 20, 7), leaf_node_5.get_bounding_rect())
         self.assertCountEqual([entry_f, entry_j], leaf_node_5.entries)

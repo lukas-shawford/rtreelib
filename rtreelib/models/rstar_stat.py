@@ -59,6 +59,7 @@ class RStarStat:
         :param axis: Axis ('x' or 'y')
         :return: List of unique entry distributions for the given axis
         """
-        distributions_min = self.stat[axis]['min']
-        distributions_max = self.stat[axis]['max']
-        return list(set(distributions_min + distributions_max))
+        # Use dict.fromkeys() to preserve order. Though order is not technically relevant, it helps to keep the
+        # split algorithm deterministic (and reduces flakiness in unit tests).
+        distributions = self.stat[axis]['min'] + self.stat[axis]['max']
+        return list(dict.fromkeys(distributions).keys())
