@@ -448,11 +448,11 @@ R*.
 
 **Guttman**:
 
-![Guttman R-Tree](https://github.com/sergkr/rtreelib/blob/rstar/doc/qgis_guttman.gif)
+![Guttman R-Tree](https://github.com/sergkr/rtreelib/blob/master/doc/qgis_guttman.gif)
 
 **R\*-Tree**:
 
-![R*-Tree](https://github.com/sergkr/rtreelib/blob/rstar/doc/qgis_rstar.gif)
+![R*-Tree](https://github.com/sergkr/rtreelib/blob/master/doc/qgis_rstar.gif)
 
 It is evident that R* has resulted in more square-like bounding rectangles with
 less overlap at the intermediate levels, compared to Guttman. The areas of overlap
