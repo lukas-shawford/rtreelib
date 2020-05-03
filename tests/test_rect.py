@@ -84,6 +84,45 @@ class TestRect(TestCase):
         # Assert
         self.assertEqual(0, area)
 
+    def test_intersects(self):
+        """Ensures intersects returns True when two rectangles intersect."""
+        # Arrange
+        r1 = Rect(min_x=0, min_y=0, max_x=5, max_y=2)
+        r2 = Rect(min_x=2, min_y=1, max_x=4, max_y=3)
+
+        # Act
+        result = r1.intersects(r2)
+
+        # Assert
+        self.assertTrue(result)
+
+    def test_intersects_disjoint(self):
+        """Ensures intersects returns False when two rectangles are completely disjoint."""
+        # Arrange
+        r1 = Rect(min_x=0, min_y=0, max_x=5, max_y=2)
+        r2 = Rect(min_x=1, min_y=5, max_x=3, max_y=9)
+
+        # Act
+        result = r1.intersects(r2)
+
+        # Assert
+        self.assertFalse(result)
+
+    def test_intersects_touches(self):
+        """
+        Ensures intersects returns False when two rectangles merely touch along a border but do not have any interior
+        intersection area.
+        """
+        # Arrange
+        r1 = Rect(min_x=0, min_y=0, max_x=5, max_y=2)
+        r2 = Rect(min_x=5, min_y=0, max_x=7, max_y=2)
+
+        # Act
+        result = r1.intersects(r2)
+
+        # Assert
+        self.assertFalse(result)
+
     def test_intersection_area(self):
         """Tests getting the intersection area of two intersecting rectangles"""
         # Arrange

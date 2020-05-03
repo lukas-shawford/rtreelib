@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 
 class Rect:
@@ -26,6 +26,24 @@ class Rect:
             max_x=max(self.max_x, rect.max_x),
             max_y=max(self.max_y, rect.max_y)
         )
+
+    def intersection(self, rect: 'Rect') -> Optional['Rect']:
+        a, b = self, rect
+        x1 = max(min(a.min_x, a.max_x), min(b.min_x, b.max_x))
+        y1 = max(min(a.min_y, a.max_y), min(b.min_y, b.max_y))
+        x2 = min(max(a.min_x, a.max_x), max(b.min_x, b.max_x))
+        y2 = min(max(a.min_y, a.max_y), max(b.min_y, b.max_y))
+        if x1 < x2 and y1 < y2:
+            return Rect(x1, y1, x2, y2)
+        return None
+
+    def intersects(self, rect: 'Rect') -> bool:
+        a, b = self, rect
+        x1 = max(min(a.min_x, a.max_x), min(b.min_x, b.max_x))
+        y1 = max(min(a.min_y, a.max_y), min(b.min_y, b.max_y))
+        x2 = min(max(a.min_x, a.max_x), max(b.min_x, b.max_x))
+        y2 = min(max(a.min_y, a.max_y), max(b.min_y, b.max_y))
+        return x1 < x2 and y1 < y2
 
     def get_intersection_area(self, rect: 'Rect') -> float:
         x_overlap = max(0.0, min(self.max_x, rect.max_x) - max(self.min_x, rect.min_x))

@@ -1,11 +1,12 @@
 import math
 from functools import partial
 from typing import TypeVar, Generic, List, Iterable, Callable, Optional, Tuple, Any
-from rtreelib.models.rect import Rect, union_all
+from rtreelib.models import Rect, get_loc_intersection_fn, Location, union_all
 
-T = TypeVar('T')
 DEFAULT_MAX_ENTRIES = 8
 EPSILON = 1e-5
+T = TypeVar('T')
+TResult = TypeVar('TResult')
 
 
 class RTreeEntry(Generic[T]):
@@ -121,6 +122,65 @@ class RTreeBase(Generic[T]):
         """
         return self.insert_strategy(self, data, rect)
 
+    def query(self, loc: Location) -> Iterable[RTreeEntry[T]]:
+        """
+        Queries leaf entries for a location (either a point or a rectangle), returning an iterable.
+        :param loc: Location to query. This may either be a Point or a Rect, or a tuple/list of coordinates representing
+            either a point or a rectangle.
+        :return: Iterable of leaf entries that matched the location query.
+        """
+        intersects = get_loc_intersection_fn(loc)
+        for leaf in self.search_nodes(lambda node: intersects(node.get_bounding_rect())):
+            for e in leaf.entries:
+                if intersects(e.rect):
+                    yield e
+
+    def query_nodes(self, loc: Location, leaves=True) -> Iterable[RTreeNode[T]]:
+        """
+        Queries nodes for a location (either a point or a rectangle), returning an iterable. By default, this method
+        returns only leaf nodes, though intermediate-level nodes can also be returned by setting the leaves parameter
+        to False.
+        :param loc: Location to query. This may either be a Point or a Rect, or a tuple/list of coordinates representing
+            either a point or a rectangle.
+        :param leaves: Indicates whether only leaf-level nodes should be returned. Optional (defaults to True).
+        :return: Iterable of nodes that matched the location query.
+        """
+        yield from self.search_nodes(_node_intersects(loc), leaves)
+
+    def search(self,
+               node_condition: Optional[Callable[[RTreeNode[T]], bool]],
+               entry_condition: Optional[Callable[[RTreeEntry[T]], bool]] = None) -> Iterable[RTreeEntry[T]]:
+        """
+        Traverses the tree, returning leaf entries that match a condition. This method optionally accepts both a node
+        condition and an entry condition. The node condition is evaluated at each level and eliminates entire subtrees.
+        In order for a leaf entry to be returned, all parent node conditions must pass. The entry condition is evaluated
+        only at the leaf level. Both conditions are optional, and if neither is passed in, all leaf entries are
+        returned.
+        :param node_condition: Condition to evaluate for each node at every level. If the condition returns False, the
+            subtree is eliminated and will not be traversed. Optional (if not passed in, all nodes are visited).
+        :param entry_condition: Condition to evaluate for leaf entries. Optional (if not passed in, all leaf entries
+            whose parent nodes passed the node_condition will be returned).
+        :return: Iterable of matching leaf entries
+        """
+        for leaf in self.search_nodes(node_condition):
+            for e in leaf.entries:
+                if entry_condition is None or entry_condition(e):
+                    yield e
+
+    def search_nodes(self, condition: Callable[[RTreeNode[T]], bool], leaves=True) -> Iterable[RTreeNode[T]]:
+        """
+        Traverses the tree, returning nodes that match a condition. By default, this method returns only leaf nodes, but
+        intermediate-level nodes can also be returned by passing leaves=False. The condition is evaluated for each node
+        at every level of the tree, and if it returns False, the entire subtree is eliminated.
+        :param condition: Condition to evaluate for each node at every level. If the condition returns False, the
+            subtree is eliminated and will not be traversed.
+        :param leaves: If True, only leaf-level nodes are returned. Otherwise, root and intermediate-level nodes are
+            also returned. Optional (defaults to True).
+        :return: Iterable of matching nodes
+        """
+        fn = _yield_if_leaf if leaves else _yield_node
+        yield from self.traverse(fn, condition)
+
     def perform_node_split(self, node: RTreeNode[T], group1: List[RTreeEntry[T]], group2: List[RTreeEntry[T]])\
             -> RTreeNode[T]:
         """
@@ -156,34 +216,60 @@ class RTreeBase(Generic[T]):
             node.parent = self.root
         return self.root
 
-    def traverse(self, fn: Callable[[RTreeNode[T]], None]) -> None:
+    def traverse(self, fn: Callable[[RTreeNode[T]], Iterable[TResult]],
+                 condition: Optional[Callable[[RTreeNode[T]], bool]] = None) -> Iterable[TResult]:
         """
         Traverses the nodes of the R-Tree in depth-first order, calling the given function on each node. For a
-        level-order traversal (breadth-first), use traverse_level_order instead.
-        :param fn: Function to execute on each node. The function should accept the node as its only parameter.
+        level-order traversal (breadth-first), use traverse_level_order instead. A condition function may optionally be
+        passed to filter which nodes get traversed. If condition returns False, then neither the node nor any of its
+        descendants will be traversed.
+        :param fn: Function to execute on each node. The function should accept the node as its only parameter and
+            should yield its result.
+        :param condition: Optional condition function to evaluate on each node. If condition returns False, then neither
+            the node nor any of its descendants will be traversed. If not passed in, all nodes will be traversed.
         """
-        self._traverse(self.root, fn)
+        yield from self.traverse_node(self.root, fn, condition)
 
-    def _traverse(self, node: RTreeNode[T], fn: Callable[[RTreeNode[T]], None]) -> None:
-        fn(node)
+    def traverse_node(self, node: RTreeNode[T], fn: Callable[[RTreeNode[T]], Iterable[TResult]],
+                      condition: Optional[Callable[[RTreeNode[T]], bool]]) -> Iterable[TResult]:
+        """
+        Traverses the tree starting from a given node in depth-first order, calling the given function on each node.
+        A condition function may optionally be passed to filter which nodes get traversed. If condition returns False,
+        then neither the node nor any of its descendants will be traversed.
+        :param node: Starting node
+        :param fn: Function to execute on each node. The function should accept the node as its only parameter and
+            should yield its result.
+        :param condition: Optional condition function to evaluate on each node. If condition returns False, then neither
+            the node nor any of its descendants will be traversed. If not passed in, all nodes will be traversed.
+        """
+        if condition is not None and not condition(node):
+            return
+        yield from fn(node)
         if not node.is_leaf:
             for entry in node.entries:
-                self._traverse(entry.child, fn)
+                yield from self.traverse_node(entry.child, fn, condition)
 
-    def traverse_level_order(self, fn: Callable[[RTreeNode[T], int], None]) -> None:
+    def traverse_level_order(self, fn: Callable[[RTreeNode[T], int], Iterable[TResult]],
+                             condition: Optional[Callable[[RTreeNode[T]], bool]] = None) -> Iterable[TResult]:
         """
         Traverses the nodes of the R-Tree in level-order (breadth first), calling the given function on each node. For a
-        depth-first traversal, use the traverse method instead.
+        depth-first traversal, use the traverse method instead. A condition function may optionally be passed to filter
+        which nodes get traversed. If condition returns False, then neither the node nor any of its descendants will be
+        traversed.
         :param fn: Function to execute on each node. This function should accept the node, and optionally the current
-            level (with 0 corresponding to the root level) as parameters.
+            level (with 0 corresponding to the root level) as parameters. The function should yield its result.
+        :param condition: Optional condition function to evaluate on each node. The condition function should accept a
+            node and a level parameter. If condition returns False, then neither the node nor any of its descendants
+            will be traversed. If not passed in, all nodes will be traversed.
         """
         stack = [(self.root, 0)]
         while stack:
             node, level = stack[0]
             stack = stack[1:]
-            fn(node, level)
-            if not node.is_leaf:
-                stack.extend([(entry.child, level + 1) for entry in node.entries])
+            if condition is None or condition(node, level):
+                yield from fn(node, level)
+                if not node.is_leaf:
+                    stack.extend([(entry.child, level + 1) for entry in node.entries])
 
     def get_levels(self) -> List[List[RTreeNode[T]]]:
         """
@@ -193,12 +279,12 @@ class RTreeBase(Generic[T]):
         levels: List[List[RTreeNode[T]]] = []
         fn = partial(_add_node_to_level, levels)
         # noinspection PyTypeChecker
-        self.traverse_level_order(fn)
+        list(self.traverse_level_order(fn))
         return levels
 
     def get_nodes(self) -> Iterable[RTreeNode[T]]:
         """Returns an iterable of all nodes in the R-Tree (including intermediate and leaf nodes)"""
-        yield from self._get_nodes(self.root)
+        return self._get_nodes(self.root)
 
     def _get_nodes(self, node: RTreeNode[T]) -> Iterable[RTreeNode[T]]:
         yield node
@@ -206,34 +292,45 @@ class RTreeBase(Generic[T]):
             for entry in node.entries:
                 yield from self._get_nodes(entry.child)
 
-    def get_leaves(self) -> List[RTreeNode[T]]:
+    def get_leaves(self) -> Iterable[RTreeNode[T]]:
         """
-        Returns a list of leaf nodes in the R-Tree. Note that R-Tree nodes are simply containers for child entries,
+        Iterates leaf nodes in the R-Tree. Note that R-Tree nodes are simply containers for child entries,
         which contain the actual data. If you want to get the actual data elements, you probably want to use
         get_leaf_entries instead.
         """
-        leaves = []
-        fn = partial(_append_if_leaf, leaves)
-        # noinspection PyTypeChecker
-        self.traverse_level_order(fn)
-        return leaves
+        return self.traverse_level_order(_yield_if_leaf_with_lvl_param)
 
     def get_leaf_entries(self) -> Iterable[RTreeEntry[T]]:
-        """Returns an iterable of the leaf entries in the R-Tree which contain the data."""
+        """Iterates leaf entries in the R-Tree which contain the data."""
         for leaf in self.get_leaves():
             for entry in leaf.entries:
                 yield entry
 
 
-def _add_node_to_level(levels: List[List[RTreeNode[T]]], node: RTreeNode[T], level: int):
+def _add_node_to_level(levels: List[List[RTreeNode[T]]], node: RTreeNode[T], level: int) -> Iterable[None]:
     if level >= len(levels):
         nodelist = []
         levels.append(nodelist)
     else:
         nodelist = levels[level]
     nodelist.append(node)
+    yield
 
 
-def _append_if_leaf(leaves: List[RTreeNode[T]], node: RTreeNode[T], _: int):
+def _yield_node(node: RTreeNode[T]) -> Iterable[RTreeNode[T]]:
+    yield node
+
+
+def _yield_if_leaf(node: RTreeNode[T]) -> Iterable[RTreeNode[T]]:
     if node.is_leaf:
-        leaves.append(node)
+        yield node
+
+
+def _yield_if_leaf_with_lvl_param(node: RTreeNode[T], _) -> Iterable[RTreeNode[T]]:
+    if node.is_leaf:
+        yield node
+
+
+def _node_intersects(loc: Location) -> Callable[[RTreeNode[T]], bool]:
+    loc_intersects = get_loc_intersection_fn(loc)
+    return lambda node: loc_intersects(node.get_bounding_rect())

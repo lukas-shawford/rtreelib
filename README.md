@@ -94,6 +94,59 @@ You can also create a custom implementation by inheriting from `RTreeBase` and p
 your own implementations for the various behaviors (insert, overflow, etc.). See the
 following section for more information.
 
+## Querying
+
+Use the `query` method to find entries at a given location. The library supports querying
+by either a point or a rectangle, and returns an iterable of matching entries that
+intersect the given location.
+
+To query using `Point`:
+
+```python
+entries = t.query(Point(2, 4))
+```
+
+Alternatively, you can also pass a tuple or list of 2 coordinates (`x` and `y`):
+
+```python
+entries = t.query((2, 4))
+```
+
+When querying by point, note that points that lie on the border (rather than the
+interior) of a bounding rectangle are considered to intersect the rectangle.
+
+To query using `Rect`:
+
+```python
+entries = t.query(Rect(2, 1, 4, 5))
+```
+
+Alternatively, you can also pass a tuple or list of 4 coordinates (the order is the
+same as when using `Rect`, namely `min_x`, `min_y`, `max_x`, and `max_y`):
+
+```python
+entries = t.query((2, 1, 4, 5))
+```
+
+When querying by rectangle, note that the rectangles must have a non-zero intersection
+area. Rectangles that intersect at the border but whose interiors do not overlap will
+*not* match the query.
+
+Note the above methods return entries rather than nodes. To get an iterable of leaf
+nodes instead, use `query_nodes`:
+
+```python
+nodes = t.query_nodes(Rect(2, 1, 4, 5))
+```
+
+By default, this method will only return leaf-level nodes. To include all
+intermediate-level nodes (including the root), set the optional `leaves` parameter
+to `False` (it defaults to `True` if not passed in):
+
+```python
+all_nodes = t.query_nodes(Rect(2, 1, 4, 5), leaves=False)
+```
+
 ## Extending
 
 As noted above, the purpose of this library is to provide a pluggable R-tree implementation
